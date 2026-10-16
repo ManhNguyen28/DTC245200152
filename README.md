@@ -17,7 +17,7 @@ Website tạo đề thi trắc nghiệm, làm bài và chấm điểm tự độ
 | Thành phần | Công nghệ |
 |---|---|
 | Ứng dụng web | Node.js 22, Express 5, EJS |
-| Cơ sở dữ liệu | MySQL 8.4 |
+| Cơ sở dữ liệu | MySQL 8.0 |
 | Quản lý CSDL | phpMyAdmin 5.2 |
 | Triển khai | Docker, Docker Compose |
 
