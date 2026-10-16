@@ -32,7 +32,22 @@ chống CSV injection, truy vấn tham số hóa (chống SQL injection), escape
 | Ứng dụng web | Node.js 22, Express 5, EJS, express-session, bcryptjs |
 | Cơ sở dữ liệu | MySQL 8.0 (phiên đăng nhập cũng lưu trong MySQL) |
 | Quản lý CSDL | phpMyAdmin 5.2 |
+| Reverse proxy | Nginx (HTTPS tự ký, TLS 1.2/1.3, security headers, rate limiting) |
 | Triển khai | Docker, Docker Compose |
+
+## Kiến trúc
+
+```
+Người dùng ──https:443──▶ nginx ──▶ web (Node.js :3000) ──▶ db (MySQL :3306)
+           ──http:80 ──▶ (301 → https)  └─▶ /phpmyadmin/ ──▶ phpmyadmin ──▶ db
+```
+
+- Chỉ **nginx** mở cổng ra ngoài (80, 443); `web`, `phpmyadmin`, `db` chỉ truy cập được bên trong mạng Docker.
+- Hai mạng tách biệt: `frontend` (nginx ↔ web, phpmyadmin) và `backend` (web, phpmyadmin ↔ db).
+  Nginx không thuộc mạng `backend` nên không thể kết nối tới CSDL.
+- Security headers: HSTS, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy,
+  Cross-Origin-Opener-Policy, Content-Security-Policy; ẩn phiên bản Nginx (`server_tokens off`).
+- Giới hạn 20 lần gửi form đăng nhập/phút/IP ở Nginx (thêm vào bộ khóa đăng nhập sai của ứng dụng).
 
 ## Cấu trúc thư mục
 
@@ -54,6 +69,11 @@ DTC245200152/
 ├── db/
 │   ├── init.sql                # Lược đồ CSDL + dữ liệu mẫu (chạy ở lần khởi động đầu)
 │   └── sample-questions.csv    # File CSV mẫu để thử chức năng nhập câu hỏi
+├── nginx/
+│   ├── conf.d/quiz.conf        # Reverse proxy, HTTPS, chuyển hướng HTTP, rate limiting, log JSON
+│   ├── snippets/               # proxy.conf (header chuyển tiếp), security-headers.conf
+│   ├── gen-cert.sh             # Tạo chứng chỉ SSL tự ký
+│   └── certs/                  # server.crt, server.key (tự tạo, không đưa lên Git)
 ├── tests/e2e-test.sh           # Kiểm thử tự động 45 kịch bản (chức năng + bảo mật)
 ├── docker-compose.yml
 ├── .env.example                # Mẫu biến môi trường
@@ -69,16 +89,23 @@ Yêu cầu: Docker Engine + Compose plugin (Linux) hoặc Docker Desktop, Git.
 git clone https://github.com/DTC245200152/DTC245200152.git
 cd DTC245200152
 
-# 2. Tạo file biến môi trường rồi đặt mật khẩu mạnh trong .env
+# 2. Tạo file biến môi trường rồi đặt mật khẩu mạnh và PUBLIC_HOST (IP máy chủ) trong .env
 cp .env.example .env
 #    SESSION_SECRET có thể tạo bằng: openssl rand -hex 32
 
-# 3. Build và khởi chạy toàn bộ hệ thống
+# 3. Tạo chứng chỉ SSL tự ký cho địa chỉ máy chủ
+sh nginx/gen-cert.sh 192.168.146.128
+
+# 4. Build và khởi chạy toàn bộ hệ thống
 docker compose up -d --build
 
-# 4. Kiểm tra trạng thái
+# 5. Kiểm tra trạng thái và cấu hình Nginx
 docker compose ps
+docker exec quiz-nginx nginx -t
 ```
+
+Trình duyệt sẽ cảnh báo chứng chỉ không tin cậy (do tự ký) – chọn **Nâng cao → Tiếp tục truy cập**.
+Kết nối vẫn được mã hóa đầy đủ.
 
 ## Địa chỉ truy cập
 
@@ -86,10 +113,13 @@ Thay `<IP>` bằng địa chỉ máy chủ (ví dụ `192.168.146.128`, hoặc `
 
 | Dịch vụ | URL | Tài khoản |
 |---|---|---|
-| Website Quiz | http://&lt;IP&gt;:3000 | Tự đăng ký tài khoản học viên |
-| Trang quản trị | http://&lt;IP&gt;:3000/admin | `ADMIN_USER` / `ADMIN_PASSWORD` trong `.env` |
-| phpMyAdmin | http://&lt;IP&gt;:8080 | `MYSQL_USER` / `MYSQL_PASSWORD` trong `.env` |
-| Health check | http://&lt;IP&gt;:3000/health | – |
+| Website Quiz | https://&lt;IP&gt;/ | Tự đăng ký tài khoản học viên |
+| Trang quản trị | https://&lt;IP&gt;/admin | `ADMIN_USER` / `ADMIN_PASSWORD` trong `.env` |
+| phpMyAdmin | https://&lt;IP&gt;/phpmyadmin/ | `MYSQL_USER` / `MYSQL_PASSWORD` trong `.env` |
+| Health check ứng dụng | https://&lt;IP&gt;/health | – |
+| Health check Nginx | http://&lt;IP&gt;/nginx-health | – |
+
+Truy cập `http://<IP>` sẽ tự chuyển hướng sang `https://<IP>`.
 
 Tài khoản admin được ứng dụng tạo tự động ở lần khởi động đầu tiên. Đổi `ADMIN_PASSWORD` sau đó
 **không** đổi mật khẩu của tài khoản đã tồn tại.

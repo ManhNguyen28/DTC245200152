@@ -21,6 +21,12 @@ app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 app.disable('x-powered-by'); // không để lộ "Express" trong header phản hồi
 
+// Chạy sau Nginx: tin header X-Forwarded-For / X-Forwarded-Proto của đúng số lớp proxy khai báo.
+// Nhờ đó req.ip là IP thật của người dùng (không phải IP của Nginx) và req.secure = true khi dùng HTTPS
+// (bắt buộc để cookie "secure" được gửi). Không đặt biến này khi chạy trực tiếp không qua proxy.
+const trustProxy = Number(process.env.TRUST_PROXY);
+if (trustProxy > 0) app.set('trust proxy', trustProxy);
+
 // Biến và hàm dùng chung cho mọi view. hostname = ID container khi chạy trong Docker.
 app.locals.hostname = os.hostname();
 app.locals.formatDate = formatDate;

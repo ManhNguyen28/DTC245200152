@@ -2,7 +2,8 @@
 # Kiểm thử end-to-end web Quiz: chức năng + bảo mật. Chạy trên máy chủ: bash tests/e2e-test.sh
 # Lưu ý: tạo dữ liệu test (sv_an, sv_binh...). Chạy trên CSDL sạch: docker compose down -v && docker compose up -d
 cd "$(dirname "$0")/.." && set -a && . ./.env && set +a
-B=http://localhost:3000
+B=${BASE_URL:-https://localhost}            # đi qua Nginx (HTTPS)
+curl() { command curl -k "$@"; }            # -k: chấp nhận chứng chỉ tự ký
 T=$(mktemp -d)
 PASS=0; FAIL=0
 ok()   { echo "  ✅ ĐẠT  $1"; PASS=$((PASS+1)); }

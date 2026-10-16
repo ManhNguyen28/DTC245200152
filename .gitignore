@@ -8,3 +8,7 @@ node_modules/
 *.log
 .DS_Store
 Thumbs.db
+
+# Chứng chỉ và khóa bí mật SSL - mỗi máy chủ tự tạo bằng nginx/gen-cert.sh
+nginx/certs/*
+!nginx/certs/.gitkeep

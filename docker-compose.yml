@@ -1,8 +1,58 @@
 # Hệ thống Quiz / Thi trắc nghiệm - Đề 35
 # Nguyễn Đức Mạnh - DTC245200152
-# Giai đoạn 1: Web ứng dụng + MySQL + phpMyAdmin
+#
+# Luồng truy cập:  Người dùng --https:443--> nginx --> web (Node.js) --> db (MySQL)
+#                                             └--> /phpmyadmin/ --> phpmyadmin --> db
+# Chỉ nginx mở cổng ra ngoài. Hai mạng tách biệt:
+#   frontend: nginx <-> web, phpmyadmin
+#   backend : web, phpmyadmin <-> db      (nginx KHÔNG nằm trong mạng này -> không chạm được CSDL)
 
 services:
+  # ---------- Reverse proxy: cổng vào duy nhất ----------
+  nginx:
+    image: nginx:alpine
+    container_name: quiz-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"     # HTTP  -> chuyển hướng sang HTTPS
+      - "443:443"   # HTTPS
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro          # cấu hình site (thay toàn bộ cấu hình mặc định)
+      - ./nginx/snippets:/etc/nginx/snippets:ro      # đoạn cấu hình dùng chung
+      - ./nginx/certs:/etc/nginx/certs:ro            # chứng chỉ SSL (tạo bằng nginx/gen-cert.sh)
+    depends_on:
+      - web
+      - phpmyadmin
+    networks:
+      - frontend
+
+  # ---------- Ứng dụng web Quiz (Node.js) ----------
+  web:
+    build: ./app
+    image: quiz-web:1.0
+    container_name: quiz-web
+    restart: unless-stopped
+    environment:
+      PORT: 3000
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_NAME: ${MYSQL_DATABASE}
+      DB_USER: ${MYSQL_USER}
+      DB_PASSWORD: ${MYSQL_PASSWORD}
+      ADMIN_USER: ${ADMIN_USER}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      SESSION_SECRET: ${SESSION_SECRET}
+      TRUST_PROXY: "1"         # tin header X-Forwarded-* từ 1 lớp proxy (nginx) -> lấy đúng IP và giao thức https
+      COOKIE_SECURE: "true"    # cookie phiên chỉ gửi qua HTTPS
+    expose:
+      - "3000"                 # chỉ mở trong mạng Docker, KHÔNG publish ra máy chủ
+    depends_on:
+      db:
+        condition: service_healthy   # chỉ khởi động khi MySQL đã sẵn sàng
+    networks:
+      - frontend
+      - backend
+
   # ---------- Cơ sở dữ liệu MySQL ----------
   db:
     image: mysql:8.0
@@ -27,32 +77,7 @@ services:
     networks:
       - backend
 
-  # ---------- Ứng dụng web Quiz (Node.js) ----------
-  web:
-    build: ./app
-    image: quiz-web:1.0
-    container_name: quiz-web
-    restart: unless-stopped
-    environment:
-      PORT: 3000
-      DB_HOST: db
-      DB_PORT: 3306
-      DB_NAME: ${MYSQL_DATABASE}
-      DB_USER: ${MYSQL_USER}
-      DB_PASSWORD: ${MYSQL_PASSWORD}
-      ADMIN_USER: ${ADMIN_USER}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
-      SESSION_SECRET: ${SESSION_SECRET}
-      COOKIE_SECURE: "false"   # chuyển "true" khi đã có Nginx + HTTPS (giai đoạn 2)
-    ports:
-      - "3000:3000"   # tạm thời mở để kiểm tra; sẽ bỏ khi đưa Nginx vào làm cổng duy nhất
-    depends_on:
-      db:
-        condition: service_healthy   # chỉ khởi động khi MySQL đã sẵn sàng
-    networks:
-      - backend
-
-  # ---------- Công cụ quản lý CSDL ----------
+  # ---------- Công cụ quản lý CSDL (truy cập qua https://<IP>/phpmyadmin/) ----------
   phpmyadmin:
     image: phpmyadmin:5.2
     container_name: quiz-phpmyadmin
@@ -60,16 +85,19 @@ services:
     environment:
       PMA_HOST: db
       PMA_PORT: 3306
-    ports:
-      - "8080:80"
+      PMA_ABSOLUTE_URI: https://${PUBLIC_HOST}/phpmyadmin/   # địa chỉ công khai khi chạy sau reverse proxy
+    expose:
+      - "80"
     depends_on:
       db:
         condition: service_healthy
     networks:
+      - frontend
       - backend
 
 volumes:
   db_data:
 
 networks:
+  frontend:
   backend:
