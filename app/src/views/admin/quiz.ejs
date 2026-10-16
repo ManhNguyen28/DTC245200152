@@ -1,0 +1,44 @@
+<%- include('../partials/header') %>
+<div class="page-head">
+  <h1><%= quiz.title %></h1>
+  <a href="/admin">← Quay lại</a>
+</div>
+<p class="muted"><%= quiz.description %> · <%= quiz.time_limit %> phút · <%= questions.length %> câu hỏi</p>
+
+<% questions.forEach((q, i) => { %>
+  <section class="card question">
+    <div class="page-head">
+      <h3>Câu <%= i + 1 %>. <%= q.content %></h3>
+      <form method="post" action="/admin/questions/<%= q.id %>/delete" data-confirm="Xóa câu hỏi này?">
+        <button class="link danger" type="submit">Xóa</button>
+      </form>
+    </div>
+    <% ['A', 'B', 'C', 'D'].forEach((opt) => { %>
+      <p class="answer <%= opt === q.correct_option ? 'is-correct' : '' %>">
+        <strong><%= opt %>.</strong> <%= q['option_' + opt.toLowerCase()] %>
+        <% if (opt === q.correct_option) { %><span class="tag ok">Đáp án đúng</span><% } %>
+      </p>
+    <% }) %>
+  </section>
+<% }) %>
+
+<h2>Thêm câu hỏi</h2>
+<form class="card form" method="post" action="/admin/quizzes/<%= quiz.id %>/questions">
+  <label>Nội dung câu hỏi *
+    <textarea name="content" rows="2" required maxlength="1000"></textarea>
+  </label>
+  <% ['A', 'B', 'C', 'D'].forEach((opt) => { %>
+    <label>Phương án <%= opt %> *
+      <input name="option_<%= opt.toLowerCase() %>" required maxlength="255">
+    </label>
+  <% }) %>
+  <label>Đáp án đúng *
+    <select name="correct_option" required>
+      <% ['A', 'B', 'C', 'D'].forEach((opt) => { %>
+        <option value="<%= opt %>"><%= opt %></option>
+      <% }) %>
+    </select>
+  </label>
+  <div><button class="btn" type="submit">Thêm câu hỏi</button></div>
+</form>
+<%- include('../partials/footer') %>

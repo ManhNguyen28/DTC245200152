@@ -1,0 +1,10 @@
+# Bí mật - không bao giờ commit
+.env
+
+# Thư viện cài bằng npm (cài lại từ package-lock.json)
+node_modules/
+
+# Log, file tạm
+*.log
+.DS_Store
+Thumbs.db

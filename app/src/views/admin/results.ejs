@@ -1,0 +1,34 @@
+<%- include('../partials/header') %>
+<div class="page-head">
+  <h1>Kết quả: <%= quiz.title %></h1>
+  <a href="/admin">← Quay lại</a>
+</div>
+
+<div class="grid stats">
+  <div class="card center"><p class="muted">Lượt làm</p><p class="score"><%= stats.attempts %></p></div>
+  <div class="card center"><p class="muted">Điểm trung bình</p><p class="score"><%= stats.avg_score ?? '—' %></p></div>
+  <div class="card center"><p class="muted">Điểm cao nhất</p><p class="score"><%= stats.max_score ?? '—' %></p></div>
+</div>
+
+<section class="card">
+  <table>
+    <thead>
+      <tr><th>Thí sinh</th><th>Mã SV</th><th>Đúng</th><th>Điểm hệ 10</th><th>Thời gian nộp</th></tr>
+    </thead>
+    <tbody>
+      <% attempts.forEach((a) => { %>
+        <tr>
+          <td><a href="/result/<%= a.id %>"><%= a.student_name %></a></td>
+          <td><%= a.student_code || '—' %></td>
+          <td><%= a.score %>/<%= a.total %></td>
+          <td><%= (a.score / a.total * 10).toFixed(2) %></td>
+          <td><%= formatDate(a.submitted_at) %></td>
+        </tr>
+      <% }) %>
+      <% if (attempts.length === 0) { %>
+        <tr><td colspan="5" class="muted">Chưa có lượt làm bài nào.</td></tr>
+      <% } %>
+    </tbody>
+  </table>
+</section>
+<%- include('../partials/footer') %>

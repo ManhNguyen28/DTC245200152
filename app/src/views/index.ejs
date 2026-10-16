@@ -1,0 +1,23 @@
+<%- include('partials/header') %>
+<h1>Danh sách đề thi</h1>
+<% if (quizzes.length === 0) { %>
+  <p class="muted">Chưa có đề thi nào.</p>
+<% } %>
+<div class="grid">
+  <% quizzes.forEach((q) => { %>
+    <article class="card">
+      <h2><%= q.title %></h2>
+      <p class="muted"><%= q.description %></p>
+      <p>
+        <span class="badge"><%= q.question_count %> câu</span>
+        <span class="badge"><%= q.time_limit %> phút</span>
+      </p>
+      <% if (q.question_count > 0) { %>
+        <a class="btn" href="/quiz/<%= q.id %>">Làm bài</a>
+      <% } else { %>
+        <span class="muted">Chưa có câu hỏi</span>
+      <% } %>
+    </article>
+  <% }) %>
+</div>
+<%- include('partials/footer') %>

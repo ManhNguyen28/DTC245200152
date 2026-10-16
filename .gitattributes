@@ -1,0 +1,2 @@
+# Giữ ký tự xuống dòng LF cho mọi file văn bản (file cấu hình chạy trong container Linux)
+* text=auto eol=lf

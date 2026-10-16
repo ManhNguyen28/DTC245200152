@@ -1,0 +1,26 @@
+<%- include('partials/header') %>
+<section class="card center">
+  <h1>Kết quả: <%= attempt.quiz_title %></h1>
+  <p>Thí sinh: <strong><%= attempt.student_name %></strong>
+    <% if (attempt.student_code) { %>(<%= attempt.student_code %>)<% } %></p>
+  <p class="score"><%= attempt.score %> / <%= attempt.total %></p>
+  <p>Điểm hệ 10: <strong><%= (attempt.score / attempt.total * 10).toFixed(2) %></strong></p>
+  <p class="muted">Nộp lúc <%= formatDate(attempt.submitted_at) %></p>
+</section>
+
+<% details.forEach((d, i) => { %>
+  <section class="card question <%= d.is_correct ? 'correct' : 'wrong' %>">
+    <h3>Câu <%= i + 1 %>. <%= d.content %></h3>
+    <% ['A', 'B', 'C', 'D'].forEach((opt) => { %>
+      <p class="answer <%= opt === d.correct_option ? 'is-correct' : '' %> <%= opt === d.selected_option ? 'is-selected' : '' %>">
+        <strong><%= opt %>.</strong> <%= d['option_' + opt.toLowerCase()] %>
+        <% if (opt === d.correct_option) { %><span class="tag ok">Đáp án đúng</span><% } %>
+        <% if (opt === d.selected_option && !d.is_correct) { %><span class="tag bad">Bạn chọn</span><% } %>
+      </p>
+    <% }) %>
+    <% if (!d.selected_option) { %><p class="muted">Bạn chưa trả lời câu này.</p><% } %>
+  </section>
+<% }) %>
+
+<a class="btn" href="/">Về danh sách đề</a>
+<%- include('partials/footer') %>
