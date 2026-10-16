@@ -2,16 +2,43 @@
 -- Khởi tạo CSDL cho hệ thống Quiz (Đề 35)
 -- MySQL tự chạy file này ở lần khởi động ĐẦU TIÊN (khi volume dữ liệu còn trống),
 -- trong CSDL được khai báo bởi biến MYSQL_DATABASE.
+-- Tài khoản admin KHÔNG tạo ở đây: ứng dụng tự tạo khi khởi động từ biến môi trường
+-- ADMIN_USER / ADMIN_PASSWORD (mật khẩu được băm bcrypt, không nằm trong mã nguồn).
 -- =====================================================================
 SET NAMES utf8mb4;
 
+-- Người dùng: quản trị viên và học viên
+CREATE TABLE IF NOT EXISTS users (
+  id            INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  username      VARCHAR(30)  NOT NULL,
+  password_hash VARCHAR(100) NOT NULL COMMENT 'bcrypt, không lưu mật khẩu gốc',
+  full_name     VARCHAR(100) NOT NULL,
+  student_code  VARCHAR(20)  NULL,
+  role          ENUM('admin','student') NOT NULL DEFAULT 'student',
+  created_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  last_login_at TIMESTAMP NULL,
+  UNIQUE KEY uq_users_username (username)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Danh mục môn học
+CREATE TABLE IF NOT EXISTS categories (
+  id   INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(100) NOT NULL,
+  UNIQUE KEY uq_categories_name (name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- Đề thi
 CREATE TABLE IF NOT EXISTS quizzes (
-  id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  title       VARCHAR(200)  NOT NULL,
-  description VARCHAR(1000) NULL,
-  time_limit  SMALLINT UNSIGNED NOT NULL DEFAULT 15 COMMENT 'Thời gian làm bài (phút)',
-  created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+  id                INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  category_id       INT UNSIGNED NULL,
+  title             VARCHAR(200)  NOT NULL,
+  description       VARCHAR(1000) NULL,
+  time_limit        SMALLINT UNSIGNED NOT NULL DEFAULT 15 COMMENT 'Thời gian làm bài (phút)',
+  max_attempts      SMALLINT UNSIGNED NOT NULL DEFAULT 0  COMMENT '0 = không giới hạn',
+  shuffle_questions BOOLEAN NOT NULL DEFAULT TRUE,
+  is_published      BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at        TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_quizzes_category FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Câu hỏi trắc nghiệm 4 phương án
@@ -27,17 +54,23 @@ CREATE TABLE IF NOT EXISTS questions (
   CONSTRAINT fk_questions_quiz FOREIGN KEY (quiz_id) REFERENCES quizzes(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Lượt làm bài
+-- Lượt làm bài. Hạn nộp (deadline_at) do máy chủ tính khi bắt đầu làm bài.
 CREATE TABLE IF NOT EXISTS attempts (
-  id           INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  quiz_id      INT UNSIGNED NOT NULL,
-  student_name VARCHAR(100) NOT NULL,
-  student_code VARCHAR(20)  NULL,
-  score        SMALLINT UNSIGNED NOT NULL,
-  total        SMALLINT UNSIGNED NOT NULL,
-  submitted_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  id             INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  quiz_id        INT UNSIGNED NOT NULL,
+  user_id        INT UNSIGNED NOT NULL,
+  status         ENUM('in_progress','submitted') NOT NULL DEFAULT 'in_progress',
+  question_order JSON NOT NULL COMMENT 'Thứ tự câu hỏi (đã xáo trộn) của lượt làm này',
+  score          SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+  total          SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+  is_late        BOOLEAN NOT NULL DEFAULT FALSE COMMENT 'Nộp quá hạn -> không tính điểm',
+  started_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  deadline_at    TIMESTAMP NOT NULL,
+  submitted_at   TIMESTAMP NULL,
+  INDEX idx_attempts_user_quiz (user_id, quiz_id),
   INDEX idx_attempts_submitted (submitted_at),
-  CONSTRAINT fk_attempts_quiz FOREIGN KEY (quiz_id) REFERENCES quizzes(id) ON DELETE CASCADE
+  CONSTRAINT fk_attempts_quiz FOREIGN KEY (quiz_id) REFERENCES quizzes(id) ON DELETE CASCADE,
+  CONSTRAINT fk_attempts_user FOREIGN KEY (user_id) REFERENCES users(id)   ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Chi tiết câu trả lời của từng lượt làm bài
@@ -51,13 +84,27 @@ CREATE TABLE IF NOT EXISTS attempt_answers (
   CONSTRAINT fk_answers_question FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Phiên đăng nhập (express-mysql-session). Lưu trong DB để khởi động lại web không mất phiên.
+CREATE TABLE IF NOT EXISTS sessions (
+  session_id VARCHAR(128) COLLATE utf8mb4_bin NOT NULL,
+  expires    INT UNSIGNED NOT NULL,
+  data       MEDIUMTEXT COLLATE utf8mb4_bin,
+  PRIMARY KEY (session_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- ---------------------------------------------------------------------
 -- Dữ liệu mẫu
 -- ---------------------------------------------------------------------
-INSERT INTO quizzes (id, title, description, time_limit) VALUES
-  (1, 'Docker cơ bản', 'Kiểm tra kiến thức nền tảng về container, image và Docker Compose.', 10),
-  (2, 'Mạng máy tính căn bản', 'Các khái niệm về giao thức, cổng dịch vụ và HTTP.', 10),
-  (3, 'Linux cơ bản', 'Lệnh và phân quyền thường dùng khi quản trị máy chủ Linux.', 10);
+INSERT INTO categories (id, name) VALUES
+  (1, 'Docker & DevOps'),
+  (2, 'Mạng máy tính'),
+  (3, 'Hệ điều hành Linux'),
+  (4, 'An toàn thông tin');
+
+INSERT INTO quizzes (id, category_id, title, description, time_limit, max_attempts) VALUES
+  (1, 1, 'Docker cơ bản', 'Kiểm tra kiến thức nền tảng về container, image và Docker Compose.', 10, 3),
+  (2, 2, 'Mạng máy tính căn bản', 'Các khái niệm về giao thức, cổng dịch vụ và HTTP.', 10, 0),
+  (3, 3, 'Linux cơ bản', 'Lệnh và phân quyền thường dùng khi quản trị máy chủ Linux.', 10, 0);
 
 INSERT INTO questions (quiz_id, content, option_a, option_b, option_c, option_d, correct_option) VALUES
   (1, 'Lệnh nào liệt kê các container đang chạy?', 'docker ps', 'docker images', 'docker run', 'docker build', 'A'),

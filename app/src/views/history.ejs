@@ -1,0 +1,32 @@
+<%- include('partials/header') %>
+<h1>Lịch sử làm bài</h1>
+<div class="grid stats">
+  <div class="card center"><p class="muted">Số bài đã nộp</p><p class="score"><%= doneCount %></p></div>
+  <div class="card center"><p class="muted">Điểm trung bình</p><p class="score"><%= avg === null ? '—' : avg.toFixed(2) %></p></div>
+</div>
+
+<section class="card">
+  <table>
+    <thead><tr><th>Đề thi</th><th>Trạng thái</th><th>Điểm</th><th>Thời gian làm</th><th>Bắt đầu</th><th></th></tr></thead>
+    <tbody>
+      <% attempts.forEach((a) => { %>
+        <tr>
+          <td><a href="/quiz/<%= a.quiz_id %>"><%= a.quiz_title %></a></td>
+          <td>
+            <% if (a.status === 'in_progress') { %><span class="pill pill-info">Đang làm</span>
+            <% } else if (a.is_late) { %><span class="pill pill-bad">Quá giờ</span>
+            <% } else { %><span class="pill pill-ok">Đã nộp</span><% } %>
+          </td>
+          <td><%= a.status === 'submitted' ? `${a.score}/${a.total} (${score10(a.score, a.total)})` : '—' %></td>
+          <td><%= formatDuration(a.duration) %></td>
+          <td><%= formatDate(a.started_at) %></td>
+          <td><a href="/<%= a.status === 'submitted' ? 'result' : 'attempt' %>/<%= a.id %>"><%= a.status === 'submitted' ? 'Xem kết quả' : 'Làm tiếp' %></a></td>
+        </tr>
+      <% }) %>
+      <% if (attempts.length === 0) { %>
+        <tr><td colspan="6" class="muted">Bạn chưa làm bài nào. <a href="/">Chọn đề thi</a></td></tr>
+      <% } %>
+    </tbody>
+  </table>
+</section>
+<%- include('partials/footer') %>

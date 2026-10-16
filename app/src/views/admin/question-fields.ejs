@@ -1,0 +1,15 @@
+<label>Nội dung câu hỏi *
+  <textarea name="content" rows="2" required maxlength="1000"><%= question.content || '' %></textarea>
+</label>
+<% ['A', 'B', 'C', 'D'].forEach((opt) => { %>
+  <label>Phương án <%= opt %> *
+    <input name="option_<%= opt.toLowerCase() %>" value="<%= question['option_' + opt.toLowerCase()] || '' %>" required maxlength="255">
+  </label>
+<% }) %>
+<label>Đáp án đúng *
+  <select name="correct_option" required>
+    <% ['A', 'B', 'C', 'D'].forEach((opt) => { %>
+      <option value="<%= opt %>" <%= question.correct_option === opt ? 'selected' : '' %>><%= opt %></option>
+    <% }) %>
+  </select>
+</label>

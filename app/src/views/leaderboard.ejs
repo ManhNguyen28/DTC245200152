@@ -1,0 +1,27 @@
+<%- include('partials/header') %>
+<div class="page-head">
+  <h1>Bảng xếp hạng: <%= quiz.title %></h1>
+  <a href="/quiz/<%= quiz.id %>">← Về đề thi</a>
+</div>
+<p class="muted">Mỗi học viên lấy lượt làm tốt nhất. Bằng điểm thì ai làm nhanh hơn xếp trên.</p>
+<section class="card">
+  <table>
+    <thead><tr><th>Hạng</th><th>Học viên</th><th>Mã SV</th><th>Đúng</th><th>Điểm</th><th>Thời gian làm</th></tr></thead>
+    <tbody>
+      <% rows.forEach((r, i) => { %>
+        <tr class="<%= locals.currentUser && r.username === currentUser.username ? 'me' : '' %>">
+          <td><span class="rank rank-<%= i + 1 %>"><%= i + 1 %></span></td>
+          <td><%= r.full_name %></td>
+          <td><%= r.student_code || '—' %></td>
+          <td><%= r.score %>/<%= r.total %></td>
+          <td><strong><%= score10(r.score, r.total) %></strong></td>
+          <td><%= formatDuration(r.duration) %></td>
+        </tr>
+      <% }) %>
+      <% if (rows.length === 0) { %>
+        <tr><td colspan="6" class="muted">Chưa có học viên nào hoàn thành đề này.</td></tr>
+      <% } %>
+    </tbody>
+  </table>
+</section>
+<%- include('partials/footer') %>

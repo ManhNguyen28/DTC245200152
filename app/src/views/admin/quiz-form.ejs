@@ -1,18 +1,36 @@
 <%- include('../partials/header') %>
-<h1>Tạo đề thi mới</h1>
-<form class="card form" method="post" action="/admin/quizzes">
+<%- include('../partials/admin-nav', { active: 'quizzes' }) %>
+<h1><%= title %></h1>
+<form class="card form" method="post" action="<%= quiz.id ? `/admin/quizzes/${quiz.id}` : '/admin/quizzes' %>">
+  <%- include('../partials/csrf') %>
   <label>Tiêu đề *
-    <input name="title" required maxlength="200">
+    <input name="title" value="<%= quiz.title || '' %>" required maxlength="200">
   </label>
   <label>Mô tả
-    <textarea name="description" rows="3" maxlength="1000"></textarea>
+    <textarea name="description" rows="3" maxlength="1000"><%= quiz.description || '' %></textarea>
   </label>
-  <label>Thời gian làm bài (phút)
-    <input name="time_limit" type="number" min="1" max="180" value="15">
+  <label>Danh mục
+    <select name="category_id">
+      <option value="">Chưa phân loại</option>
+      <% categories.forEach((c) => { %>
+        <option value="<%= c.id %>" <%= c.id === quiz.category_id ? 'selected' : '' %>><%= c.name %></option>
+      <% }) %>
+    </select>
   </label>
+  <div class="row">
+    <label>Thời gian làm bài (phút)
+      <input name="time_limit" type="number" min="1" max="180" value="<%= quiz.time_limit %>">
+    </label>
+    <label>Số lượt tối đa mỗi học viên
+      <input name="max_attempts" type="number" min="0" max="50" value="<%= quiz.max_attempts %>">
+      <small class="muted">0 = không giới hạn</small>
+    </label>
+  </div>
+  <label class="check"><input type="checkbox" name="shuffle_questions" value="1" <%= quiz.shuffle_questions ? 'checked' : '' %>> Xáo trộn thứ tự câu hỏi mỗi lượt làm</label>
+  <label class="check"><input type="checkbox" name="is_published" value="1" <%= quiz.is_published ? 'checked' : '' %>> Công khai (học viên nhìn thấy và làm được)</label>
   <div>
-    <button class="btn" type="submit">Tạo đề</button>
-    <a href="/admin">Hủy</a>
+    <button class="btn" type="submit"><%= quiz.id ? 'Lưu thay đổi' : 'Tạo đề' %></button>
+    <a href="<%= quiz.id ? `/admin/quizzes/${quiz.id}` : '/admin/quizzes' %>">Hủy</a>
   </div>
 </form>
 <%- include('../partials/footer') %>

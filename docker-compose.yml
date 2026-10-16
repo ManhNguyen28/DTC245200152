@@ -42,6 +42,8 @@ services:
       DB_PASSWORD: ${MYSQL_PASSWORD}
       ADMIN_USER: ${ADMIN_USER}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      SESSION_SECRET: ${SESSION_SECRET}
+      COOKIE_SECURE: "false"   # chuyển "true" khi đã có Nginx + HTTPS (giai đoạn 2)
     ports:
       - "3000:3000"   # tạm thời mở để kiểm tra; sẽ bỏ khi đưa Nginx vào làm cổng duy nhất
     depends_on:

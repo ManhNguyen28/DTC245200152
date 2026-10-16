@@ -12,8 +12,14 @@ const pool = mysql.createPool({
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
   charset: 'utf8mb4',
+  timezone: 'Z', // ứng dụng làm việc với giờ UTC; chỉ đổi sang giờ Việt Nam khi hiển thị
   waitForConnections: true,
   connectionLimit: 10,
+});
+
+// Mỗi kết nối mới đặt múi giờ phiên làm việc = UTC, khớp với tùy chọn timezone ở trên.
+pool.pool.on('connection', (conn) => {
+  conn.query("SET time_zone = '+00:00'");
 });
 
 module.exports = pool;

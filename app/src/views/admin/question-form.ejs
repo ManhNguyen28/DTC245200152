@@ -1,0 +1,16 @@
+<%- include('../partials/header') %>
+<%- include('../partials/admin-nav', { active: 'quizzes' }) %>
+<div class="page-head">
+  <h1>Sửa câu hỏi</h1>
+  <a href="/admin/quizzes/<%= quiz.id %>">← <%= quiz.title %></a>
+</div>
+<form class="card form" method="post" action="/admin/questions/<%= question.id %>">
+  <%- include('../partials/csrf') %>
+  <%- include('question-fields', { question }) %>
+  <p class="muted small">Lưu ý: sửa đáp án đúng không làm thay đổi điểm của các bài đã nộp trước đó.</p>
+  <div>
+    <button class="btn" type="submit">Lưu thay đổi</button>
+    <a href="/admin/quizzes/<%= quiz.id %>">Hủy</a>
+  </div>
+</form>
+<%- include('../partials/footer') %>

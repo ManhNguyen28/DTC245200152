@@ -1,0 +1,74 @@
+<%- include('partials/header') %>
+<div class="two-col">
+  <section class="card">
+    <% if (quiz.category_name) { %><span class="category"><%= quiz.category_name %></span><% } %>
+    <h1><%= quiz.title %></h1>
+    <% if (!quiz.is_published) { %><p class="pill pill-warn">Đề đang ẩn – chỉ quản trị viên xem được</p><% } %>
+    <p class="muted"><%= quiz.description %></p>
+    <ul class="facts">
+      <li>Số câu hỏi: <strong><%= quiz.question_count %></strong></li>
+      <li>Thời gian: <strong><%= quiz.time_limit %> phút</strong> (hết giờ tự động nộp bài)</li>
+      <li>Số lượt làm: <strong><%= quiz.max_attempts > 0 ? `tối đa ${quiz.max_attempts} lượt` : 'không giới hạn' %></strong></li>
+      <li>Thứ tự câu hỏi: <strong><%= quiz.shuffle_questions ? 'xáo trộn mỗi lượt' : 'cố định' %></strong></li>
+    </ul>
+
+    <% if (!locals.currentUser) { %>
+      <a class="btn" href="/login?next=/quiz/<%= quiz.id %>">Đăng nhập để làm bài</a>
+    <% } else if (quiz.question_count === 0) { %>
+      <p class="muted">Đề thi chưa có câu hỏi.</p>
+    <% } else if (inProgress) { %>
+      <form method="post" action="/quiz/<%= quiz.id %>/start">
+        <%- include('partials/csrf') %>
+        <button class="btn" type="submit">Tiếp tục bài đang làm</button>
+      </form>
+    <% } else if (remainingAttempts === 0) { %>
+      <p class="pill pill-bad">Bạn đã dùng hết lượt làm bài của đề này.</p>
+    <% } else { %>
+      <form method="post" action="/quiz/<%= quiz.id %>/start">
+        <%- include('partials/csrf') %>
+        <button class="btn" type="submit">Bắt đầu làm bài</button>
+        <% if (remainingAttempts !== null) { %><span class="muted">Còn <%= remainingAttempts %> lượt</span><% } %>
+      </form>
+    <% } %>
+  </section>
+
+  <aside class="card">
+    <h2>Top 5</h2>
+    <% if (top.length === 0) { %>
+      <p class="muted">Chưa có ai làm đề này.</p>
+    <% } else { %>
+      <ol class="ranking">
+        <% top.forEach((r) => { %>
+          <li><span><%= r.full_name %></span><strong><%= score10(r.score, r.total) %></strong></li>
+        <% }) %>
+      </ol>
+    <% } %>
+    <% if (locals.currentUser) { %><a href="/quiz/<%= quiz.id %>/leaderboard">Xem bảng xếp hạng đầy đủ →</a><% } %>
+  </aside>
+</div>
+
+<% if (myAttempts.length) { %>
+  <h2>Các lượt làm của bạn</h2>
+  <section class="card">
+    <table>
+      <thead><tr><th>#</th><th>Trạng thái</th><th>Điểm</th><th>Thời gian làm</th><th>Nộp lúc</th><th></th></tr></thead>
+      <tbody>
+        <% myAttempts.forEach((a, i) => { %>
+          <tr>
+            <td><%= myAttempts.length - i %></td>
+            <td>
+              <% if (a.status === 'in_progress') { %><span class="pill pill-info">Đang làm</span>
+              <% } else if (a.is_late) { %><span class="pill pill-bad">Quá giờ</span>
+              <% } else { %><span class="pill pill-ok">Đã nộp</span><% } %>
+            </td>
+            <td><%= a.status === 'submitted' ? `${a.score}/${a.total} (${score10(a.score, a.total)})` : '—' %></td>
+            <td><%= formatDuration(a.duration) %></td>
+            <td><%= formatDate(a.submitted_at) %></td>
+            <td><a href="/<%= a.status === 'submitted' ? 'result' : 'attempt' %>/<%= a.id %>">Xem</a></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </section>
+<% } %>
+<%- include('partials/footer') %>

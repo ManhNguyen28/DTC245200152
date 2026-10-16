@@ -1,33 +1,36 @@
 <%- include('../partials/header') %>
+<%- include('../partials/admin-nav', { active: 'quizzes' }) %>
 <div class="page-head">
   <h1>Kết quả: <%= quiz.title %></h1>
-  <a href="/admin">← Quay lại</a>
+  <div class="actions">
+    <a class="btn" href="/admin/quizzes/<%= quiz.id %>/results.csv">Xuất CSV (Excel)</a>
+    <a class="btn btn-ghost" href="/admin/quizzes/<%= quiz.id %>/stats">Thống kê</a>
+  </div>
 </div>
 
-<div class="grid stats">
-  <div class="card center"><p class="muted">Lượt làm</p><p class="score"><%= stats.attempts %></p></div>
-  <div class="card center"><p class="muted">Điểm trung bình</p><p class="score"><%= stats.avg_score ?? '—' %></p></div>
-  <div class="card center"><p class="muted">Điểm cao nhất</p><p class="score"><%= stats.max_score ?? '—' %></p></div>
+<div class="grid kpis">
+  <div class="card center"><p class="muted">Lượt nộp</p><p class="score"><%= summary.attempts %></p></div>
+  <div class="card center"><p class="muted">Học viên</p><p class="score"><%= summary.students %></p></div>
+  <div class="card center"><p class="muted">Điểm TB</p><p class="score"><%= summary.avg_score ?? '—' %></p></div>
+  <div class="card center"><p class="muted">Cao nhất</p><p class="score"><%= summary.max_score ?? '—' %></p></div>
+  <div class="card center"><p class="muted">Tỉ lệ đạt (≥5)</p><p class="score"><%= summary.pass_rate === null ? '—' : summary.pass_rate + '%' %></p></div>
 </div>
 
 <section class="card">
   <table>
-    <thead>
-      <tr><th>Thí sinh</th><th>Mã SV</th><th>Đúng</th><th>Điểm hệ 10</th><th>Thời gian nộp</th></tr>
-    </thead>
+    <thead><tr><th>Học viên</th><th>Mã SV</th><th>Đúng</th><th>Điểm</th><th>Thời gian làm</th><th>Nộp lúc</th></tr></thead>
     <tbody>
       <% attempts.forEach((a) => { %>
         <tr>
-          <td><a href="/result/<%= a.id %>"><%= a.student_name %></a></td>
+          <td><a href="/result/<%= a.id %>"><%= a.full_name %></a> <span class="muted small">@<%= a.username %></span></td>
           <td><%= a.student_code || '—' %></td>
           <td><%= a.score %>/<%= a.total %></td>
-          <td><%= (a.score / a.total * 10).toFixed(2) %></td>
+          <td><strong><%= score10(a.score, a.total) %></strong> <% if (a.is_late) { %><span class="pill pill-bad">Quá giờ</span><% } %></td>
+          <td><%= formatDuration(a.duration) %></td>
           <td><%= formatDate(a.submitted_at) %></td>
         </tr>
       <% }) %>
-      <% if (attempts.length === 0) { %>
-        <tr><td colspan="5" class="muted">Chưa có lượt làm bài nào.</td></tr>
-      <% } %>
+      <% if (attempts.length === 0) { %><tr><td colspan="6" class="muted">Chưa có lượt nộp bài nào.</td></tr><% } %>
     </tbody>
   </table>
 </section>

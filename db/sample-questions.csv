@@ -1,0 +1,6 @@
+content,option_a,option_b,option_c,option_d,correct_option
+"Mục đích chính của HTTPS là gì?","Tăng tốc độ tải trang","Mã hóa dữ liệu truyền giữa trình duyệt và máy chủ","Nén hình ảnh","Lưu cache trên máy chủ",B
+"Header X-Frame-Options dùng để chống loại tấn công nào?","SQL Injection","Clickjacking","DDoS","Brute force",B
+"Vì sao nên băm mật khẩu bằng bcrypt thay vì lưu trực tiếp?","Để mật khẩu ngắn hơn","Để đăng nhập nhanh hơn","Nếu lộ CSDL kẻ tấn công cũng không biết mật khẩu gốc","Để dễ khôi phục mật khẩu",C
+"Nguyên tắc 'least privilege' (quyền tối thiểu) nghĩa là gì?","Cấp mọi quyền cho quản trị viên","Chỉ cấp đúng quyền cần thiết để thực hiện công việc","Không cấp quyền cho ai","Cấp quyền theo thâm niên",B
+"Chạy container bằng user không phải root giúp gì?","Container chạy nhanh hơn","Giảm thiệt hại nếu ứng dụng bị chiếm quyền","Tiết kiệm RAM","Không cần mật khẩu",B

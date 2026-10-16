@@ -1,0 +1,16 @@
+<%- include('partials/header') %>
+<form class="card form narrow" method="post" action="/login">
+  <h1>Đăng nhập</h1>
+  <% if (locals.error) { %><div class="flash flash-error"><%= error %></div><% } %>
+  <%- include('partials/csrf') %>
+  <input type="hidden" name="next" value="<%= next %>">
+  <label>Tên đăng nhập
+    <input name="username" value="<%= username %>" required maxlength="30" autocomplete="username" autofocus>
+  </label>
+  <label>Mật khẩu
+    <input name="password" type="password" required maxlength="72" autocomplete="current-password">
+  </label>
+  <button class="btn block" type="submit">Đăng nhập</button>
+  <p class="muted center">Chưa có tài khoản? <a href="/register">Đăng ký</a></p>
+</form>
+<%- include('partials/footer') %>

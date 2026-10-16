@@ -1,0 +1,68 @@
+<%- include('../partials/header') %>
+<%- include('../partials/admin-nav', { active: 'quizzes' }) %>
+<div class="page-head">
+  <h1>Thống kê: <%= quiz.title %></h1>
+  <a class="btn btn-ghost" href="/admin/quizzes/<%= quiz.id %>/results">Danh sách kết quả</a>
+</div>
+
+<div class="grid kpis">
+  <div class="card center"><p class="muted">Lượt nộp</p><p class="score"><%= summary.attempts %></p></div>
+  <div class="card center"><p class="muted">Điểm TB</p><p class="score"><%= summary.avg_score ?? '—' %></p></div>
+  <div class="card center"><p class="muted">Thấp nhất</p><p class="score"><%= summary.min_score ?? '—' %></p></div>
+  <div class="card center"><p class="muted">Cao nhất</p><p class="score"><%= summary.max_score ?? '—' %></p></div>
+  <div class="card center"><p class="muted">Tỉ lệ đạt (≥5)</p><p class="score"><%= summary.pass_rate === null ? '—' : summary.pass_rate + '%' %></p></div>
+</div>
+
+<div class="two-col">
+  <section class="card">
+    <h2>Phân bố điểm</h2>
+    <% const maxBucket = Math.max(1, ...distribution); %>
+    <div class="vbars">
+      <% distribution.forEach((n, i) => { %>
+        <div class="vbar">
+          <span class="vbar-value"><%= n %></span>
+          <div class="vbar-fill <%= i < 5 ? 'low' : '' %>" data-h="<%= Math.round(n / maxBucket * 100) %>"></div>
+          <span class="vbar-label"><%= i %></span>
+        </div>
+      <% }) %>
+    </div>
+    <p class="muted small center">Số lượt theo mức điểm (hệ 10, làm tròn xuống)</p>
+  </section>
+
+  <section class="card">
+    <h2>Top 10</h2>
+    <ol class="ranking">
+      <% top.forEach((r) => { %>
+        <li><span><%= r.full_name %> <span class="muted small"><%= formatDuration(r.duration) %></span></span><strong><%= score10(r.score, r.total) %></strong></li>
+      <% }) %>
+    </ol>
+    <% if (top.length === 0) { %><p class="muted">Chưa có dữ liệu.</p><% } %>
+  </section>
+</div>
+
+<h2>Phân tích từng câu hỏi</h2>
+<p class="muted">Câu có tỉ lệ đúng thấp có thể quá khó hoặc đáp án gây nhầm lẫn. Phương án in đậm là đáp án đúng.</p>
+<section class="card">
+  <table>
+    <thead><tr><th>#</th><th>Câu hỏi</th><th>Tỉ lệ đúng</th><th>A</th><th>B</th><th>C</th><th>D</th><th>Bỏ trống</th></tr></thead>
+    <tbody>
+      <% questions.forEach((q, i) => { %>
+        <tr>
+          <td><%= i + 1 %></td>
+          <td><%= q.content %></td>
+          <td class="rate">
+            <% if (q.correctRate === null) { %>—<% } else { %>
+              <div class="hbar"><div class="hbar-fill <%= q.correctRate < 50 ? 'low' : '' %>" data-w="<%= q.correctRate %>"></div></div>
+              <%= q.correctRate %>% <span class="muted small">(<%= q.correct %>/<%= q.answered %>)</span>
+            <% } %>
+          </td>
+          <% ['A', 'B', 'C', 'D'].forEach((opt) => { %>
+            <td><%- opt === q.correct_option ? `<strong>${q[opt.toLowerCase()]}</strong>` : q[opt.toLowerCase()] %></td>
+          <% }) %>
+          <td><%= q.blank %></td>
+        </tr>
+      <% }) %>
+    </tbody>
+  </table>
+</section>
+<%- include('../partials/footer') %>

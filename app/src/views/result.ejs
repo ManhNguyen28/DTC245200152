@@ -1,11 +1,16 @@
 <%- include('partials/header') %>
 <section class="card center">
   <h1>Kết quả: <%= attempt.quiz_title %></h1>
-  <p>Thí sinh: <strong><%= attempt.student_name %></strong>
+  <p>Thí sinh: <strong><%= attempt.full_name %></strong>
     <% if (attempt.student_code) { %>(<%= attempt.student_code %>)<% } %></p>
   <p class="score"><%= attempt.score %> / <%= attempt.total %></p>
-  <p>Điểm hệ 10: <strong><%= (attempt.score / attempt.total * 10).toFixed(2) %></strong></p>
-  <p class="muted">Nộp lúc <%= formatDate(attempt.submitted_at) %></p>
+  <p>Điểm hệ 10: <strong><%= score10(attempt.score, attempt.total) %></strong></p>
+  <% if (attempt.is_late) { %><p class="pill pill-bad">Nộp quá thời gian – bài làm không được tính điểm</p><% } %>
+  <p class="muted">Thời gian làm: <%= formatDuration(attempt.duration) %> · Nộp lúc <%= formatDate(attempt.submitted_at) %></p>
+  <p>
+    <a class="btn" href="/quiz/<%= attempt.quiz_id %>">Về trang đề thi</a>
+    <a class="btn btn-ghost" href="/quiz/<%= attempt.quiz_id %>/leaderboard">Bảng xếp hạng</a>
+  </p>
 </section>
 
 <% details.forEach((d, i) => { %>
@@ -18,9 +23,7 @@
         <% if (opt === d.selected_option && !d.is_correct) { %><span class="tag bad">Bạn chọn</span><% } %>
       </p>
     <% }) %>
-    <% if (!d.selected_option) { %><p class="muted">Bạn chưa trả lời câu này.</p><% } %>
+    <% if (!d.selected_option) { %><p class="muted">Không trả lời câu này.</p><% } %>
   </section>
 <% }) %>
-
-<a class="btn" href="/">Về danh sách đề</a>
 <%- include('partials/footer') %>

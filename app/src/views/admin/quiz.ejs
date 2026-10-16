@@ -1,17 +1,32 @@
 <%- include('../partials/header') %>
+<%- include('../partials/admin-nav', { active: 'quizzes' }) %>
 <div class="page-head">
-  <h1><%= quiz.title %></h1>
-  <a href="/admin">← Quay lại</a>
+  <div>
+    <h1><%= quiz.title %></h1>
+    <p class="muted">
+      <%= quiz.category_name || 'Chưa phân loại' %> · <%= quiz.time_limit %> phút · <%= questions.length %> câu hỏi ·
+      <span class="pill <%= quiz.is_published ? 'pill-ok' : 'pill-warn' %>"><%= quiz.is_published ? 'Công khai' : 'Đang ẩn' %></span>
+    </p>
+  </div>
+  <div class="actions">
+    <a class="btn btn-ghost" href="/admin/quizzes/<%= quiz.id %>/edit">Sửa đề</a>
+    <a class="btn btn-ghost" href="/admin/quizzes/<%= quiz.id %>/import">Nhập từ CSV</a>
+    <a class="btn btn-ghost" href="/admin/quizzes/<%= quiz.id %>/stats">Thống kê</a>
+    <a class="btn btn-ghost" href="/quiz/<%= quiz.id %>">Xem như học viên</a>
+  </div>
 </div>
-<p class="muted"><%= quiz.description %> · <%= quiz.time_limit %> phút · <%= questions.length %> câu hỏi</p>
 
 <% questions.forEach((q, i) => { %>
   <section class="card question">
     <div class="page-head">
       <h3>Câu <%= i + 1 %>. <%= q.content %></h3>
-      <form method="post" action="/admin/questions/<%= q.id %>/delete" data-confirm="Xóa câu hỏi này?">
-        <button class="link danger" type="submit">Xóa</button>
-      </form>
+      <div class="actions">
+        <a href="/admin/questions/<%= q.id %>/edit">Sửa</a>
+        <form method="post" action="/admin/questions/<%= q.id %>/delete" data-confirm="Xóa câu hỏi này?">
+          <%- include('../partials/csrf') %>
+          <button class="link danger" type="submit">Xóa</button>
+        </form>
+      </div>
     </div>
     <% ['A', 'B', 'C', 'D'].forEach((opt) => { %>
       <p class="answer <%= opt === q.correct_option ? 'is-correct' : '' %>">
@@ -21,24 +36,12 @@
     <% }) %>
   </section>
 <% }) %>
+<% if (questions.length === 0) { %><p class="muted">Đề chưa có câu hỏi. Thêm thủ công bên dưới hoặc nhập từ file CSV.</p><% } %>
 
 <h2>Thêm câu hỏi</h2>
 <form class="card form" method="post" action="/admin/quizzes/<%= quiz.id %>/questions">
-  <label>Nội dung câu hỏi *
-    <textarea name="content" rows="2" required maxlength="1000"></textarea>
-  </label>
-  <% ['A', 'B', 'C', 'D'].forEach((opt) => { %>
-    <label>Phương án <%= opt %> *
-      <input name="option_<%= opt.toLowerCase() %>" required maxlength="255">
-    </label>
-  <% }) %>
-  <label>Đáp án đúng *
-    <select name="correct_option" required>
-      <% ['A', 'B', 'C', 'D'].forEach((opt) => { %>
-        <option value="<%= opt %>"><%= opt %></option>
-      <% }) %>
-    </select>
-  </label>
+  <%- include('../partials/csrf') %>
+  <%- include('question-fields', { question: {} }) %>
   <div><button class="btn" type="submit">Thêm câu hỏi</button></div>
 </form>
 <%- include('../partials/footer') %>

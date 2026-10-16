@@ -12,8 +12,22 @@
       <a class="brand" href="/">Quiz Online</a>
       <nav>
         <a href="/">Đề thi</a>
-        <a href="/admin">Quản trị</a>
+        <% if (locals.currentUser) { %>
+          <a href="/me/history">Lịch sử</a>
+          <% if (currentUser.role === 'admin') { %><a href="/admin">Quản trị</a><% } %>
+          <span class="who"><%= currentUser.full_name %></span>
+          <form method="post" action="/logout" class="inline">
+            <input type="hidden" name="_csrf" value="<%= locals.csrfToken %>">
+            <button class="link light" type="submit">Đăng xuất</button>
+          </form>
+        <% } else { %>
+          <a href="/login">Đăng nhập</a>
+          <a href="/register" class="nav-btn">Đăng ký</a>
+        <% } %>
       </nav>
     </div>
   </header>
   <main class="container">
+    <% if (locals.flash) { %>
+      <div class="flash flash-<%= flash.type %>"><%= flash.message %></div>
+    <% } %>

@@ -1,0 +1,38 @@
+<%- include('../partials/header') %>
+<%- include('../partials/admin-nav', { active: 'quizzes' }) %>
+<div class="page-head">
+  <h1>Quản lý đề thi</h1>
+  <a class="btn" href="/admin/quizzes/new">+ Tạo đề mới</a>
+</div>
+
+<section class="card">
+  <table>
+    <thead>
+      <tr><th>Đề thi</th><th>Danh mục</th><th>Trạng thái</th><th>Câu</th><th>Thời gian</th><th>Lượt làm</th><th>Thao tác</th></tr>
+    </thead>
+    <tbody>
+      <% quizzes.forEach((q) => { %>
+        <tr>
+          <td><a href="/admin/quizzes/<%= q.id %>"><%= q.title %></a></td>
+          <td><%= q.category_name || 'Chưa phân loại' %></td>
+          <td><span class="pill <%= q.is_published ? 'pill-ok' : 'pill-warn' %>"><%= q.is_published ? 'Công khai' : 'Đang ẩn' %></span></td>
+          <td><%= q.question_count %></td>
+          <td><%= q.time_limit %> phút</td>
+          <td><%= q.attempt_count %><%= q.max_attempts > 0 ? ` (tối đa ${q.max_attempts}/người)` : '' %></td>
+          <td class="actions">
+            <a href="/admin/quizzes/<%= q.id %>">Câu hỏi</a>
+            <a href="/admin/quizzes/<%= q.id %>/edit">Sửa</a>
+            <a href="/admin/quizzes/<%= q.id %>/results">Kết quả</a>
+            <a href="/admin/quizzes/<%= q.id %>/stats">Thống kê</a>
+            <form method="post" action="/admin/quizzes/<%= q.id %>/delete" data-confirm="Xóa đề thi này cùng toàn bộ câu hỏi và kết quả?">
+              <%- include('../partials/csrf') %>
+              <button class="link danger" type="submit">Xóa</button>
+            </form>
+          </td>
+        </tr>
+      <% }) %>
+      <% if (quizzes.length === 0) { %><tr><td colspan="7" class="muted">Chưa có đề thi nào.</td></tr><% } %>
+    </tbody>
+  </table>
+</section>
+<%- include('../partials/footer') %>

@@ -1,0 +1,60 @@
+<%- include('../partials/header') %>
+<%- include('../partials/admin-nav', { active: 'dashboard' }) %>
+<h1>Tổng quan hệ thống</h1>
+
+<div class="grid kpis">
+  <div class="card center"><p class="muted">Học viên</p><p class="score"><%= totals.students %></p></div>
+  <div class="card center"><p class="muted">Đề thi</p><p class="score"><%= totals.quizzes %></p></div>
+  <div class="card center"><p class="muted">Câu hỏi</p><p class="score"><%= totals.questions %></p></div>
+  <div class="card center"><p class="muted">Lượt nộp bài</p><p class="score"><%= totals.attempts %></p></div>
+  <div class="card center"><p class="muted">Điểm trung bình</p><p class="score"><%= totals.avg_score ?? '—' %></p></div>
+</div>
+
+<div class="two-col">
+  <section class="card">
+    <h2>Lượt nộp bài 7 ngày gần nhất</h2>
+    <% const maxDay = Math.max(1, ...days.map((d) => d.n)); %>
+    <div class="vbars">
+      <% days.forEach((d) => { %>
+        <div class="vbar">
+          <span class="vbar-value"><%= d.n %></span>
+          <div class="vbar-fill" data-h="<%= Math.round(d.n / maxDay * 100) %>"></div>
+          <span class="vbar-label"><%= d.label %></span>
+        </div>
+      <% }) %>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Đề được làm nhiều nhất</h2>
+    <table>
+      <thead><tr><th>Đề thi</th><th>Lượt</th><th>Điểm TB</th></tr></thead>
+      <tbody>
+        <% topQuizzes.forEach((q) => { %>
+          <tr><td><a href="/admin/quizzes/<%= q.id %>/stats"><%= q.title %></a></td><td><%= q.attempts %></td><td><%= q.avg_score %></td></tr>
+        <% }) %>
+        <% if (topQuizzes.length === 0) { %><tr><td colspan="3" class="muted">Chưa có dữ liệu.</td></tr><% } %>
+      </tbody>
+    </table>
+  </section>
+</div>
+
+<h2>Bài nộp gần đây</h2>
+<section class="card">
+  <table>
+    <thead><tr><th>Học viên</th><th>Mã SV</th><th>Đề thi</th><th>Điểm</th><th>Nộp lúc</th></tr></thead>
+    <tbody>
+      <% recent.forEach((a) => { %>
+        <tr>
+          <td><a href="/result/<%= a.id %>"><%= a.full_name %></a></td>
+          <td><%= a.student_code || '—' %></td>
+          <td><%= a.quiz_title %></td>
+          <td><%= a.score %>/<%= a.total %> <% if (a.is_late) { %><span class="pill pill-bad">Quá giờ</span><% } %></td>
+          <td><%= formatDate(a.submitted_at) %></td>
+        </tr>
+      <% }) %>
+      <% if (recent.length === 0) { %><tr><td colspan="5" class="muted">Chưa có bài nộp nào.</td></tr><% } %>
+    </tbody>
+  </table>
+</section>
+<%- include('../partials/footer') %>

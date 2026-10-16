@@ -1,0 +1,43 @@
+<%- include('../partials/header') %>
+<%- include('../partials/admin-nav', { active: 'quizzes' }) %>
+<div class="page-head">
+  <h1>Nhập câu hỏi từ CSV</h1>
+  <a href="/admin/quizzes/<%= quiz.id %>">← <%= quiz.title %></a>
+</div>
+
+<section class="card">
+  <h2>Định dạng file</h2>
+  <p>Mỗi dòng là một câu hỏi gồm <strong>6 cột</strong>: nội dung, phương án A, B, C, D, đáp án đúng (A/B/C/D).
+     Ô có dấu phẩy thì đặt trong ngoặc kép. Có thể soạn bằng Excel rồi <em>Save As → CSV UTF-8</em>.</p>
+  <pre class="code">content,option_a,option_b,option_c,option_d,correct_option
+"Mục đích chính của HTTPS là gì?","Tăng tốc độ","Mã hóa dữ liệu truyền đi","Nén ảnh","Cache",B</pre>
+</section>
+
+<% if (errors.length) { %>
+  <div class="flash flash-error">
+    <strong>Chưa nhập câu hỏi nào vì dữ liệu có lỗi:</strong>
+    <ul><% errors.slice(0, 20).forEach((e) => { %><li><%= e %></li><% }) %></ul>
+    <% if (errors.length > 20) { %><p>… và <%= errors.length - 20 %> lỗi khác.</p><% } %>
+  </div>
+<% } %>
+
+<form class="card form wide" method="post" action="/admin/quizzes/<%= quiz.id %>/import">
+  <%- include('../partials/csrf') %>
+  <label>Chọn file CSV (nội dung sẽ hiện vào ô bên dưới để kiểm tra trước khi nhập)
+    <input type="file" accept=".csv,text/csv" id="csv-file">
+  </label>
+  <label>Nội dung CSV *
+    <textarea name="csv_text" id="csv-text" rows="12" required><%= csvText %></textarea>
+  </label>
+  <div class="row">
+    <label>Dấu phân cách
+      <select name="delimiter">
+        <option value=",">Dấu phẩy ( , )</option>
+        <option value=";">Dấu chấm phẩy ( ; )</option>
+      </select>
+    </label>
+    <label class="check"><input type="checkbox" name="has_header" value="1" checked> Dòng đầu tiên là tiêu đề cột</label>
+  </div>
+  <button class="btn" type="submit">Nhập câu hỏi</button>
+</form>
+<%- include('../partials/footer') %>

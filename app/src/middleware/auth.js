@@ -1,35 +1,42 @@
 'use strict';
 
-const crypto = require('crypto');
-const logger = require('../logger');
+const pool = require('../db');
+const { setFlash } = require('../utils');
 
-// So sánh chuỗi trong thời gian không đổi để tránh tấn công dò mật khẩu theo thời gian (timing attack).
-function safeEqual(a, b) {
-  const ha = crypto.createHash('sha256').update(String(a)).digest();
-  const hb = crypto.createHash('sha256').update(String(b)).digest();
-  return crypto.timingSafeEqual(ha, hb);
-}
-
-// Bảo vệ khu vực /admin bằng HTTP Basic Auth, tài khoản lấy từ biến môi trường.
-function adminAuth(req, res, next) {
-  const expectedUser = process.env.ADMIN_USER;
-  const expectedPassword = process.env.ADMIN_PASSWORD;
-
-  if (expectedUser && expectedPassword) {
-    const [scheme, encoded] = (req.headers.authorization || '').split(' ');
-    if (scheme === 'Basic' && encoded) {
-      const [user, ...rest] = Buffer.from(encoded, 'base64').toString('utf8').split(':');
-      if (safeEqual(user, expectedUser) && safeEqual(rest.join(':'), expectedPassword)) {
-        return next();
-      }
-      logger.warn('admin_login_failed', { user, ip: req.ip });
+// Nạp thông tin người dùng đang đăng nhập (nếu có) cho mọi request.
+async function loadUser(req, res, next) {
+  res.locals.currentUser = null;
+  if (req.session.userId) {
+    const [[user]] = await pool.query(
+      'SELECT id, username, full_name, student_code, role FROM users WHERE id = ?',
+      [req.session.userId]
+    );
+    if (user) {
+      req.user = user;
+      res.locals.currentUser = user;
+    } else {
+      delete req.session.userId; // tài khoản đã bị xóa
     }
-  } else {
-    logger.error('admin_credentials_not_configured');
   }
-
-  res.set('WWW-Authenticate', 'Basic realm="Quiz Admin", charset="UTF-8"');
-  return res.status(401).send('Yêu cầu đăng nhập quản trị.');
+  next();
 }
 
-module.exports = adminAuth;
+// Bắt buộc đăng nhập; chưa đăng nhập thì chuyển tới trang đăng nhập rồi quay lại trang đang xem.
+function requireLogin(req, res, next) {
+  if (req.user) return next();
+  setFlash(req, 'info', 'Vui lòng đăng nhập để tiếp tục.');
+  const nextUrl = req.method === 'GET' ? `?next=${encodeURIComponent(req.originalUrl)}` : '';
+  return res.redirect(303, `/login${nextUrl}`);
+}
+
+// Chỉ quản trị viên được vào khu vực /admin (phân quyền theo vai trò).
+function requireAdmin(req, res, next) {
+  if (!req.user) return requireLogin(req, res, next);
+  if (req.user.role === 'admin') return next();
+  return res.status(403).render('error', {
+    title: 'Không có quyền truy cập',
+    message: 'Chức năng này chỉ dành cho quản trị viên.',
+  });
+}
+
+module.exports = { loadUser, requireLogin, requireAdmin };

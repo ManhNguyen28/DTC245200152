@@ -1,0 +1,23 @@
+<%- include('../partials/header') %>
+<%- include('../partials/admin-nav', { active: 'users' }) %>
+<h1>Người dùng</h1>
+<section class="card">
+  <table>
+    <thead><tr><th>Họ và tên</th><th>Tên đăng nhập</th><th>Mã SV</th><th>Vai trò</th><th>Bài đã nộp</th><th>Điểm TB</th><th>Đăng ký</th><th>Đăng nhập gần nhất</th></tr></thead>
+    <tbody>
+      <% users.forEach((u) => { %>
+        <tr>
+          <td><%= u.full_name %></td>
+          <td>@<%= u.username %></td>
+          <td><%= u.student_code || '—' %></td>
+          <td><span class="pill <%= u.role === 'admin' ? 'pill-info' : 'pill-ok' %>"><%= u.role === 'admin' ? 'Quản trị' : 'Học viên' %></span></td>
+          <td><%= u.attempts %></td>
+          <td><%= u.avg_score ?? '—' %></td>
+          <td><%= formatDate(u.created_at) %></td>
+          <td><%= formatDate(u.last_login_at) %></td>
+        </tr>
+      <% }) %>
+    </tbody>
+  </table>
+</section>
+<%- include('../partials/footer') %>
