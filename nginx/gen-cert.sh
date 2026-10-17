@@ -27,5 +27,15 @@ openssl req -x509 -nodes -newkey rsa:2048 -sha256 -days 365 \
 chmod 600 "$DIR/server.key"
 chmod 644 "$DIR/server.crt"
 
+# Container nginx bỏ mọi capability (cap_drop: ALL), kể cả CAP_DAC_OVERRIDE -> root trong container
+# không còn "vượt" được phân quyền file. Khóa bí mật phải thuộc sở hữu root (uid 0) để nginx đọc được.
+if [ "$(id -u)" -ne 0 ]; then
+  if sudo -n true 2>/dev/null; then
+    sudo chown 0:0 "$DIR/server.key"
+  else
+    docker run --rm -v "$(cd "$DIR" && pwd):/certs" alpine:latest chown 0:0 /certs/server.key
+  fi
+fi
+
 echo "Đã tạo chứng chỉ cho $HOST (hiệu lực 365 ngày):"
 openssl x509 -in "$DIR/server.crt" -noout -subject -dates -ext subjectAltName

@@ -4,27 +4,40 @@
 # Luồng truy cập:  Người dùng --https:443--> nginx --> web (Node.js) --> db (MySQL)
 #                                             └--> /phpmyadmin/ --> phpmyadmin --> db
 #                                             └--> /grafana/, /prometheus/ --> giám sát
-# Chỉ nginx mở cổng ra ngoài. Ba mạng tách biệt:
-#   frontend  : nginx <-> web, phpmyadmin, grafana, prometheus, nginx-exporter
-#   backend   : web, phpmyadmin, mysqld-exporter <-> db   (nginx KHÔNG nằm trong mạng này -> không chạm được CSDL)
-#   monitoring: prometheus <-> các exporter, web (/metrics); grafana -> prometheus, loki; promtail -> loki
+# Chỉ nginx mở cổng ra ngoài. Bốn mạng tách biệt:
+#   frontend    : nginx <-> web, phpmyadmin, grafana, prometheus, nginx-exporter
+#   backend     : web, phpmyadmin, mysqld-exporter <-> db     (internal: không ra Internet; nginx không thuộc mạng này)
+#   monitoring  : prometheus <-> exporter, web (/metrics); grafana -> prometheus, loki; promtail -> loki (internal)
+#   socket-proxy: promtail -> docker-socket-proxy                (internal)
+#
+# HARDENING (tóm tắt):
+#   - Mọi container: no-new-privileges, giới hạn RAM / CPU / số tiến trình, xoay vòng log, ghim phiên bản image
+#   - Bỏ toàn bộ Linux capabilities (cap_drop: ALL), chỉ thêm lại đúng quyền cần thiết (nginx)
+#   - Hệ thống file chỉ đọc (read_only) cho các container không cần ghi
+#   - Web chạy bằng user thường (USER node trong Dockerfile)
+#   - MySQL: user ứng dụng chỉ SELECT/INSERT/UPDATE/DELETE; root chỉ đăng nhập từ localhost
+#   - Promtail đọc Docker API qua proxy chỉ cho phép xem container (không cấp thẳng docker.sock)
 
-# Xoay vòng log của Docker cho MỌI container: tối đa 3 file x 10 MB.
-# Mặc định file log lớn không giới hạn -> có thể làm đầy ổ đĩa máy chủ.
-# (Log vẫn được lưu lâu dài, có tổ chức trong Loki.)
+# Xoay vòng log của Docker: tối đa 3 file x 10 MB mỗi container (tránh đầy ổ đĩa).
 x-logging: &default-logging
   driver: json-file
   options:
     max-size: "10m"
     max-file: "3"
 
+# Thiết lập dùng chung cho MỌI service (gộp vào bằng "<<: *secure").
+x-secure: &secure
+  restart: unless-stopped
+  logging: *default-logging
+  security_opt:
+    - no-new-privileges:true   # tiến trình không thể tự tăng quyền (vd qua chương trình setuid như sudo)
+
 services:
   # ---------- Reverse proxy: cổng vào duy nhất ----------
   nginx:
-    image: nginx:alpine
+    <<: *secure
+    image: nginx:1.31.3-alpine
     container_name: quiz-nginx
-    restart: unless-stopped
-    logging: *default-logging
     ports:
       - "80:80"     # HTTP  -> chuyển hướng sang HTTPS
       - "443:443"   # HTTPS
@@ -32,7 +45,26 @@ services:
       - ./nginx/conf.d:/etc/nginx/conf.d:ro          # cấu hình site (thay toàn bộ cấu hình mặc định)
       - ./nginx/snippets:/etc/nginx/snippets:ro      # đoạn cấu hình dùng chung
       - ./nginx/certs:/etc/nginx/certs:ro            # chứng chỉ SSL (tạo bằng nginx/gen-cert.sh)
-      - ./nginx/auth:/etc/nginx/auth:ro              # mật khẩu Basic Auth cho /prometheus/ (nginx/gen-htpasswd.sh)
+      - ./nginx/auth:/etc/nginx/auth:ro              # mật khẩu Basic Auth (nginx/gen-htpasswd.sh)
+    read_only: true                                  # không ghi được vào hệ thống file của container
+    tmpfs:                                           # chỉ những thư mục Nginx cần ghi -> vùng nhớ tạm trong RAM
+      - /var/cache/nginx
+      - /var/run
+      - /tmp
+    cap_drop: [ALL]
+    cap_add:                                         # chỉ thêm lại đúng quyền Nginx cần:
+      - NET_BIND_SERVICE                             #   mở cổng < 1024 (80, 443)
+      - CHOWN                                        #   tạo thư mục cache cho tiến trình worker
+      - SETUID                                       #   chuyển tiến trình worker sang user "nginx" (không chạy root)
+      - SETGID
+    mem_limit: 128m
+    cpus: 0.5
+    pids_limit: 100
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1/nginx-health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
     depends_on:
       - web
       - phpmyadmin
@@ -41,13 +73,12 @@ services:
     networks:
       - frontend
 
-  # ---------- Ứng dụng web Quiz (Node.js) ----------
+  # ---------- Ứng dụng web Quiz (Node.js, chạy bằng user "node" - xem app/Dockerfile) ----------
   web:
+    <<: *secure
     build: ./app
-    image: quiz-web:1.0
+    image: quiz-web:1.1
     container_name: quiz-web
-    restart: unless-stopped
-    logging: *default-logging
     environment:
       PORT: 3000
       DB_HOST: db
@@ -60,6 +91,13 @@ services:
       SESSION_SECRET: ${SESSION_SECRET}
       TRUST_PROXY: "1"         # tin header X-Forwarded-* từ 1 lớp proxy (nginx) -> lấy đúng IP và giao thức https
       COOKIE_SECURE: "true"    # cookie phiên chỉ gửi qua HTTPS
+    read_only: true            # ứng dụng không cần ghi file -> kẻ xâm nhập không cài được mã độc
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]            # ứng dụng web không cần bất kỳ quyền đặc biệt nào của Linux
+    mem_limit: 256m
+    cpus: 1.0
+    pids_limit: 100
     expose:
       - "3000"                 # chỉ mở trong mạng Docker, KHÔNG publish ra máy chủ
     depends_on:
@@ -72,12 +110,12 @@ services:
 
   # ---------- Cơ sở dữ liệu MySQL ----------
   db:
-    image: mysql:8.0
+    <<: *secure
+    image: mysql:8.0.46
     container_name: quiz-db
-    restart: unless-stopped
-    logging: *default-logging
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_ROOT_HOST: localhost                                # root chỉ đăng nhập từ bên trong container
       MYSQL_DATABASE: ${MYSQL_DATABASE}
       MYSQL_USER: ${MYSQL_USER}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
@@ -88,8 +126,12 @@ services:
       - db_data:/var/lib/mysql                                   # dữ liệu bền vững, không mất khi xóa container
       - ./db/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro # tạo bảng + dữ liệu mẫu ở lần chạy đầu
       - ./db/02-monitoring-user.sh:/docker-entrypoint-initdb.d/02-monitoring-user.sh:ro  # user 'exporter' quyền tối thiểu
+      - ./db/03-app-privileges.sh:/docker-entrypoint-initdb.d/03-app-privileges.sh:ro    # thu hẹp quyền user ứng dụng
+    mem_limit: 768m
+    cpus: 1.0
+    pids_limit: 500
     healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      test: ["CMD-SHELL", "mysqladmin ping --protocol=socket -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -97,16 +139,18 @@ services:
     networks:
       - backend
 
-  # ---------- Công cụ quản lý CSDL (truy cập qua https://<IP>/phpmyadmin/) ----------
+  # ---------- Công cụ quản lý CSDL (https://<IP>/phpmyadmin/, có thêm Basic Auth ở Nginx) ----------
   phpmyadmin:
-    image: phpmyadmin:5.2
+    <<: *secure
+    image: phpmyadmin:5.2.3
     container_name: quiz-phpmyadmin
-    restart: unless-stopped
-    logging: *default-logging
     environment:
       PMA_HOST: db
       PMA_PORT: 3306
       PMA_ABSOLUTE_URI: https://${PUBLIC_HOST}/phpmyadmin/   # địa chỉ công khai khi chạy sau reverse proxy
+    mem_limit: 256m
+    cpus: 0.5
+    pids_limit: 200
     expose:
       - "80"
     depends_on:
@@ -120,20 +164,24 @@ services:
 
   # ---------- Prometheus: thu thập & lưu số liệu, đánh giá cảnh báo ----------
   prometheus:
-    image: prom/prometheus:latest
+    <<: *secure
+    image: prom/prometheus:v3.14.0
     container_name: quiz-prometheus
-    restart: unless-stopped
-    logging: *default-logging
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
       - --storage.tsdb.retention.time=7d          # giữ số liệu 7 ngày
-      - --storage.tsdb.retention.size=300MB       # và không quá 300 MB (máy chủ ít dung lượng đĩa)
+      - --storage.tsdb.retention.size=300MB       # và không quá 300 MB
       - --web.external-url=https://${PUBLIC_HOST}/prometheus/   # chạy dưới đường dẫn /prometheus/ sau Nginx
     volumes:
       - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./monitoring/prometheus/rules:/etc/prometheus/rules:ro
       - prometheus_data:/prometheus
+    read_only: true
+    cap_drop: [ALL]
+    mem_limit: 512m
+    cpus: 0.5
+    pids_limit: 200
     expose:
       - "9090"
     networks:
@@ -142,10 +190,9 @@ services:
 
   # ---------- Grafana: dashboard trực quan ----------
   grafana:
-    image: grafana/grafana:latest
+    <<: *secure
+    image: grafana/grafana:13.2.1
     container_name: quiz-grafana
-    restart: unless-stopped
-    logging: *default-logging
     environment:
       GF_SERVER_DOMAIN: ${PUBLIC_HOST}
       GF_SERVER_ROOT_URL: https://${PUBLIC_HOST}/grafana/
@@ -163,8 +210,12 @@ services:
       GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /etc/grafana/dashboards/quiz-web.json
     volumes:
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro   # nguồn dữ liệu + nạp dashboard tự động
-      - ./monitoring/grafana/dashboards:/etc/grafana/dashboards:ro       # 3 dashboard dạng JSON
+      - ./monitoring/grafana/dashboards:/etc/grafana/dashboards:ro       # 4 dashboard dạng JSON
       - grafana_data:/var/lib/grafana
+    cap_drop: [ALL]
+    mem_limit: 512m
+    cpus: 0.5
+    pids_limit: 200
     expose:
       - "3000"
     depends_on:
@@ -175,11 +226,10 @@ services:
 
   # ---------- Exporter: số liệu từng container Docker ----------
   cadvisor:
-    image: gcr.io/cadvisor/cadvisor:latest
+    <<: *secure
+    image: gcr.io/cadvisor/cadvisor:v0.55.1
     container_name: quiz-cadvisor
-    restart: unless-stopped
-    logging: *default-logging
-    privileged: true    # NGOẠI LỆ có chủ đích: cần đọc cgroup của mọi container; không mở cổng ra ngoài
+    privileged: true    # NGOẠI LỆ có chủ đích: cần đọc cgroup của mọi container; chỉ ở mạng internal, không mở cổng
     devices:
       - /dev/kmsg
     command:
@@ -193,6 +243,9 @@ services:
       - /sys:/sys:ro
       - /var/lib/docker/:/var/lib/docker:ro
       - /dev/disk/:/dev/disk:ro
+    mem_limit: 256m
+    cpus: 0.5
+    pids_limit: 200
     expose:
       - "8080"
     networks:
@@ -200,15 +253,19 @@ services:
 
   # ---------- Exporter: số liệu máy chủ (CPU, RAM, ổ đĩa của VM) ----------
   node-exporter:
-    image: prom/node-exporter:latest
+    <<: *secure
+    image: prom/node-exporter:v1.12.1
     container_name: quiz-node-exporter
-    restart: unless-stopped
-    logging: *default-logging
     pid: host
     command:
       - --path.rootfs=/host
     volumes:
       - /:/host:ro,rslave
+    read_only: true
+    cap_drop: [ALL]
+    mem_limit: 64m
+    cpus: 0.2
+    pids_limit: 50
     expose:
       - "9100"
     networks:
@@ -216,15 +273,19 @@ services:
 
   # ---------- Exporter: số liệu MySQL (dùng user 'exporter' quyền tối thiểu) ----------
   mysqld-exporter:
-    image: prom/mysqld-exporter:latest
+    <<: *secure
+    image: prom/mysqld-exporter:v0.20.0
     container_name: quiz-mysqld-exporter
-    restart: unless-stopped
-    logging: *default-logging
     command:
       - --mysqld.address=db:3306
       - --mysqld.username=exporter
     environment:
       MYSQLD_EXPORTER_PASSWORD: ${MYSQL_EXPORTER_PASSWORD}
+    read_only: true
+    cap_drop: [ALL]
+    mem_limit: 64m
+    cpus: 0.2
+    pids_limit: 50
     expose:
       - "9104"
     depends_on:
@@ -236,12 +297,16 @@ services:
 
   # ---------- Exporter: số liệu Nginx (đọc trang stub_status nội bộ) ----------
   nginx-exporter:
+    <<: *secure
     image: nginx/nginx-prometheus-exporter:1.4.2
     container_name: quiz-nginx-exporter
-    restart: unless-stopped
-    logging: *default-logging
     command:
       - --nginx.scrape-uri=http://nginx:8080/stub_status
+    read_only: true
+    cap_drop: [ALL]
+    mem_limit: 64m
+    cpus: 0.1
+    pids_limit: 50
     expose:
       - "9113"
     depends_on:
@@ -254,14 +319,20 @@ services:
 
   # ---------- Loki: lưu trữ log tập trung, truy vấn bằng LogQL ----------
   loki:
+    <<: *secure
     image: grafana/loki:3.7.8
     container_name: quiz-loki
-    restart: unless-stopped
-    logging: *default-logging
     command: -config.file=/etc/loki/loki-config.yaml
     volumes:
       - ./monitoring/loki/loki-config.yaml:/etc/loki/loki-config.yaml:ro
       - loki_data:/loki
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    mem_limit: 384m
+    cpus: 0.5
+    pids_limit: 200
     expose:
       - "3100"
     networks:
@@ -269,21 +340,56 @@ services:
 
   # ---------- Promtail: thu gom log mọi container của dự án, đẩy về Loki ----------
   promtail:
+    <<: *secure
     image: grafana/promtail:3.6.8
     container_name: quiz-promtail
-    restart: unless-stopped
-    logging: *default-logging
     command: -config.file=/etc/promtail/promtail-config.yaml
     volumes:
       - ./monitoring/promtail/promtail-config.yaml:/etc/promtail/promtail-config.yaml:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro   # hỏi Docker danh sách container và đọc log
-      - promtail_data:/var/lib/promtail                  # vị trí đã đọc (không gửi trùng khi khởi động lại)
+      - promtail_data:/var/lib/promtail      # vị trí đã đọc (không gửi trùng khi khởi động lại)
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    mem_limit: 128m
+    cpus: 0.3
+    pids_limit: 100
     expose:
       - "9080"
     depends_on:
       - loki
+      - docker-socket-proxy
     networks:
       - monitoring
+      - socket-proxy
+
+  # ---------- Docker socket proxy: Promtail chỉ được XEM danh sách container và đọc log ----------
+  # Cấp thẳng /var/run/docker.sock = cấp quyền điều khiển toàn bộ Docker (tạo container privileged -> chiếm máy chủ).
+  # Proxy này chỉ cho phép các API đọc thông tin container; mọi lệnh ghi (POST/DELETE...) đều bị chặn.
+  docker-socket-proxy:
+    <<: *secure
+    image: tecnativa/docker-socket-proxy:v0.5.0
+    container_name: quiz-docker-socket-proxy
+    environment:
+      CONTAINERS: 1     # cho phép GET /containers/... (danh sách, thông tin, log)
+      NETWORKS: 1       # cho phép GET /networks (Promtail cần để gắn nhãn mạng) - chỉ XEM vì POST=0
+      POST: 0           # chặn mọi thao tác thay đổi (tạo, xóa, khởi động container...)
+      IMAGES: 0
+      VOLUMES: 0
+      EXEC: 0
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    read_only: true
+    tmpfs:
+      - /run
+      - /tmp
+    mem_limit: 64m
+    cpus: 0.2
+    pids_limit: 50
+    expose:
+      - "2375"
+    networks:
+      - socket-proxy
 
 volumes:
   db_data:
@@ -295,4 +401,8 @@ volumes:
 networks:
   frontend:
   backend:
+    internal: true      # mạng CSDL không có đường ra Internet
   monitoring:
+    internal: true      # mạng giám sát không có đường ra Internet
+  socket-proxy:
+    internal: true

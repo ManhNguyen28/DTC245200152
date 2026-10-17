@@ -104,6 +104,36 @@ máy chủ ──▶ node-exporter ───────┘
 Ghi chú: `| json status` chỉ tách trường cần dùng (tránh tạo quá nhiều chuỗi khi đếm);
 `| __error__=""` bỏ qua dòng không phải JSON.
 
+## Hardening (gia cố bảo mật)
+
+Nguyên tắc: **quyền tối thiểu** và **phòng thủ nhiều lớp** – giả định một thành phần bị xâm nhập,
+kẻ tấn công cũng không đi tiếp được.
+
+| # | Lớp | Biện pháp | Cách kiểm chứng |
+|---|---|---|---|
+| 1 | Container | Web chạy bằng user `node` (uid 1000), mã nguồn thuộc root chỉ đọc | `docker exec quiz-web whoami` → `node` |
+| 2 | Container | `read_only` + `tmpfs`, `cap_drop: ALL` (nginx chỉ giữ 4 capability), `no-new-privileges` cho 13/13 container | ghi vào `/usr/bin` → *Read-only file system*; `CapEff = 0` |
+| 3 | Container | Giới hạn RAM / CPU / số tiến trình mọi container; xoay vòng log 3 × 10 MB | `docker stats --no-stream` |
+| 4 | CSDL | User ứng dụng chỉ `SELECT, INSERT, UPDATE, DELETE` (`db/03-app-privileges.sh`); user `exporter` chỉ đọc thống kê | `DROP TABLE` → *DROP command denied* |
+| 5 | CSDL | `root` chỉ đăng nhập từ trong container (`MYSQL_ROOT_HOST=localhost`) | root qua TCP → *Access denied* |
+| 6 | Mạng | 4 mạng tách biệt; `backend`, `monitoring`, `socket-proxy` là `internal` (không ra Internet); chỉ Nginx publish 80/443 | `wget` ra Internet từ mạng backend → bị chặn |
+| 7 | Docker | Promtail đọc Docker API qua `docker-socket-proxy` chỉ cho phép GET container/network | `POST /containers/create` → 403 |
+| 8 | Chuỗi cung ứng | Ghim phiên bản mọi image (không dùng `:latest`); `npm audit` 0 lỗ hổng; npm override vá `mysql2` | `grep image: docker-compose.yml` |
+| 9 | Máy chủ | Tường lửa UFW: chặn mặc định, chỉ mở 22 (giới hạn tốc độ), 80, 443 | `sudo ufw status verbose` |
+| 10 | Vận hành | Healthcheck (web, nginx, db, cadvisor); quét image bằng Trivy: 0 lỗ hổng HIGH/CRITICAL (đã xóa npm khỏi image chạy) | `docker compose ps`; Trivy |
+| + | Web | HTTPS (TLS 1.2/1.3), security headers + CSP, rate limit đăng nhập, Basic Auth cho `/prometheus/` và `/phpmyadmin/`, chặn `/metrics` | xem mục Kiến trúc |
+| + | Bí mật | Mật khẩu ngẫu nhiên trong `.env` (quyền 600, không đưa lên Git); khóa SSL thuộc root, quyền 600 | `ls -l .env nginx/certs` |
+
+Ngoại lệ có chủ đích: **cAdvisor** chạy `privileged` để đọc cgroup của mọi container (công cụ giám sát hạ tầng,
+chỉ ở mạng internal, không mở cổng).
+
+Quét lỗ hổng image (tùy chọn):
+
+```bash
+docker run --rm -v /var/run/docker.sock:/var/run/docker.sock:ro aquasec/trivy:0.76.0 \
+  image --scanners vuln --severity HIGH,CRITICAL quiz-web:1.1
+```
+
 ## Cấu trúc thư mục
 
 ```
@@ -123,6 +153,8 @@ DTC245200152/
 │   └── package.json
 ├── db/
 │   ├── init.sql                # Lược đồ CSDL + dữ liệu mẫu (chạy ở lần khởi động đầu)
+│   ├── 02-monitoring-user.sh   # User 'exporter' chỉ đọc thống kê (cho mysqld-exporter)
+│   ├── 03-app-privileges.sh    # Thu hẹp quyền user ứng dụng; root chỉ từ localhost
 │   └── sample-questions.csv    # File CSV mẫu để thử chức năng nhập câu hỏi
 ├── nginx/
 │   ├── conf.d/quiz.conf        # Reverse proxy, HTTPS, chuyển hướng HTTP, rate limiting, log JSON
@@ -135,6 +167,7 @@ DTC245200152/
 │   ├── loki/                   # loki-config.yaml (lưu log 7 ngày)
 │   ├── promtail/               # promtail-config.yaml (Docker service discovery, gắn nhãn)
 │   └── grafana/                # provisioning (Prometheus + Loki) + dashboards/*.json (4 dashboard)
+├── scripts/ufw-setup.sh        # Tường lửa máy chủ (chặn mặc định, mở 22/80/443)
 ├── tests/
 │   ├── e2e-test.sh             # Kiểm thử tự động 45 kịch bản (chức năng + bảo mật)
 │   └── demo-traffic.sh         # Mô phỏng buổi thi: 6 học viên demo, 18 bài nộp, đăng nhập sai
@@ -166,6 +199,9 @@ docker compose up -d --build
 # 5. Kiểm tra trạng thái và cấu hình Nginx
 docker compose ps
 docker exec quiz-nginx nginx -t
+
+# 6. (Máy chủ Ubuntu) Bật tường lửa: chỉ mở SSH, HTTP, HTTPS
+sudo bash scripts/ufw-setup.sh
 ```
 
 Trình duyệt sẽ cảnh báo chứng chỉ không tin cậy (do tự ký) – chọn **Nâng cao → Tiếp tục truy cập**.
@@ -179,7 +215,7 @@ Thay `<IP>` bằng địa chỉ máy chủ (ví dụ `192.168.146.128`, hoặc `
 |---|---|---|
 | Website Quiz | https://&lt;IP&gt;/ | Tự đăng ký tài khoản học viên |
 | Trang quản trị | https://&lt;IP&gt;/admin | `ADMIN_USER` / `ADMIN_PASSWORD` trong `.env` |
-| phpMyAdmin | https://&lt;IP&gt;/phpmyadmin/ | `MYSQL_USER` / `MYSQL_PASSWORD` trong `.env` |
+| phpMyAdmin | https://&lt;IP&gt;/phpmyadmin/ | Lớp 1 (Nginx): `MONITOR_USER` / `MONITOR_PASSWORD`; lớp 2: `MYSQL_USER` / `MYSQL_PASSWORD` |
 | Grafana (4 dashboard + Explore/LogQL) | https://&lt;IP&gt;/grafana/ | `MONITOR_USER` / `MONITOR_PASSWORD` trong `.env` |
 | Prometheus | https://&lt;IP&gt;/prometheus/ | `MONITOR_USER` / `MONITOR_PASSWORD` (Basic Auth) |
 | Health check ứng dụng | https://&lt;IP&gt;/health | – |
