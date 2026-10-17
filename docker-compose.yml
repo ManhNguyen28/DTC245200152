@@ -3,9 +3,11 @@
 #
 # Luồng truy cập:  Người dùng --https:443--> nginx --> web (Node.js) --> db (MySQL)
 #                                             └--> /phpmyadmin/ --> phpmyadmin --> db
-# Chỉ nginx mở cổng ra ngoài. Hai mạng tách biệt:
-#   frontend: nginx <-> web, phpmyadmin
-#   backend : web, phpmyadmin <-> db      (nginx KHÔNG nằm trong mạng này -> không chạm được CSDL)
+#                                             └--> /grafana/, /prometheus/ --> giám sát
+# Chỉ nginx mở cổng ra ngoài. Ba mạng tách biệt:
+#   frontend  : nginx <-> web, phpmyadmin, grafana, prometheus, nginx-exporter
+#   backend   : web, phpmyadmin, mysqld-exporter <-> db   (nginx KHÔNG nằm trong mạng này -> không chạm được CSDL)
+#   monitoring: prometheus <-> các exporter, web (/metrics); grafana -> prometheus
 
 services:
   # ---------- Reverse proxy: cổng vào duy nhất ----------
@@ -20,9 +22,12 @@ services:
       - ./nginx/conf.d:/etc/nginx/conf.d:ro          # cấu hình site (thay toàn bộ cấu hình mặc định)
       - ./nginx/snippets:/etc/nginx/snippets:ro      # đoạn cấu hình dùng chung
       - ./nginx/certs:/etc/nginx/certs:ro            # chứng chỉ SSL (tạo bằng nginx/gen-cert.sh)
+      - ./nginx/auth:/etc/nginx/auth:ro              # mật khẩu Basic Auth cho /prometheus/ (nginx/gen-htpasswd.sh)
     depends_on:
       - web
       - phpmyadmin
+      - grafana
+      - prometheus
     networks:
       - frontend
 
@@ -52,6 +57,7 @@ services:
     networks:
       - frontend
       - backend
+      - monitoring                   # để Prometheus đọc /metrics
 
   # ---------- Cơ sở dữ liệu MySQL ----------
   db:
@@ -63,11 +69,13 @@ services:
       MYSQL_DATABASE: ${MYSQL_DATABASE}
       MYSQL_USER: ${MYSQL_USER}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_EXPORTER_PASSWORD: ${MYSQL_EXPORTER_PASSWORD}       # dùng bởi 02-monitoring-user.sh
       TZ: Asia/Ho_Chi_Minh
     command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
     volumes:
       - db_data:/var/lib/mysql                                   # dữ liệu bền vững, không mất khi xóa container
       - ./db/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro # tạo bảng + dữ liệu mẫu ở lần chạy đầu
+      - ./db/02-monitoring-user.sh:/docker-entrypoint-initdb.d/02-monitoring-user.sh:ro  # user 'exporter' quyền tối thiểu
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
       interval: 10s
@@ -95,9 +103,140 @@ services:
       - frontend
       - backend
 
+  # =================== GIÁM SÁT (Prometheus + Grafana) ===================
+
+  # ---------- Prometheus: thu thập & lưu số liệu, đánh giá cảnh báo ----------
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: quiz-prometheus
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=7d          # giữ số liệu 7 ngày
+      - --storage.tsdb.retention.size=300MB       # và không quá 300 MB (máy chủ ít dung lượng đĩa)
+      - --web.external-url=https://${PUBLIC_HOST}/prometheus/   # chạy dưới đường dẫn /prometheus/ sau Nginx
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/rules:/etc/prometheus/rules:ro
+      - prometheus_data:/prometheus
+    expose:
+      - "9090"
+    networks:
+      - frontend      # để Nginx chuyển /prometheus/ vào
+      - monitoring    # để thu thập số liệu từ các exporter
+
+  # ---------- Grafana: dashboard trực quan ----------
+  grafana:
+    image: grafana/grafana:latest
+    container_name: quiz-grafana
+    restart: unless-stopped
+    environment:
+      GF_SERVER_DOMAIN: ${PUBLIC_HOST}
+      GF_SERVER_ROOT_URL: https://${PUBLIC_HOST}/grafana/
+      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
+      GF_SECURITY_ADMIN_USER: ${MONITOR_USER}
+      GF_SECURITY_ADMIN_PASSWORD: ${MONITOR_PASSWORD}
+      GF_SECURITY_COOKIE_SECURE: "true"
+      GF_SECURITY_DISABLE_GRAVATAR: "true"
+      GF_USERS_ALLOW_SIGN_UP: "false"             # không cho tự đăng ký
+      GF_AUTH_ANONYMOUS_ENABLED: "false"          # bắt buộc đăng nhập
+      GF_ANALYTICS_REPORTING_ENABLED: "false"     # không gửi thống kê ra ngoài
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
+      GF_NEWS_NEWS_FEED_ENABLED: "false"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /etc/grafana/dashboards/quiz-web.json
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro   # nguồn dữ liệu + nạp dashboard tự động
+      - ./monitoring/grafana/dashboards:/etc/grafana/dashboards:ro       # 3 dashboard dạng JSON
+      - grafana_data:/var/lib/grafana
+    expose:
+      - "3000"
+    depends_on:
+      - prometheus
+    networks:
+      - frontend
+      - monitoring
+
+  # ---------- Exporter: số liệu từng container Docker ----------
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: quiz-cadvisor
+    restart: unless-stopped
+    privileged: true    # NGOẠI LỆ có chủ đích: cần đọc cgroup của mọi container; không mở cổng ra ngoài
+    devices:
+      - /dev/kmsg
+    command:
+      - --docker_only=true
+      - --housekeeping_interval=15s
+      - --store_container_labels=false
+      - --disable_metrics=advtcp,cpu_topology,cpuset,hugetlb,memory_numa,percpu,referenced_memory,resctrl,sched,tcp,udp,process
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    expose:
+      - "8080"
+    networks:
+      - monitoring
+
+  # ---------- Exporter: số liệu máy chủ (CPU, RAM, ổ đĩa của VM) ----------
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: quiz-node-exporter
+    restart: unless-stopped
+    pid: host
+    command:
+      - --path.rootfs=/host
+    volumes:
+      - /:/host:ro,rslave
+    expose:
+      - "9100"
+    networks:
+      - monitoring
+
+  # ---------- Exporter: số liệu MySQL (dùng user 'exporter' quyền tối thiểu) ----------
+  mysqld-exporter:
+    image: prom/mysqld-exporter:latest
+    container_name: quiz-mysqld-exporter
+    restart: unless-stopped
+    command:
+      - --mysqld.address=db:3306
+      - --mysqld.username=exporter
+    environment:
+      MYSQLD_EXPORTER_PASSWORD: ${MYSQL_EXPORTER_PASSWORD}
+    expose:
+      - "9104"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - backend       # để kết nối MySQL
+      - monitoring    # để Prometheus thu thập
+
+  # ---------- Exporter: số liệu Nginx (đọc trang stub_status nội bộ) ----------
+  nginx-exporter:
+    image: nginx/nginx-prometheus-exporter:1.4.2
+    container_name: quiz-nginx-exporter
+    restart: unless-stopped
+    command:
+      - --nginx.scrape-uri=http://nginx:8080/stub_status
+    expose:
+      - "9113"
+    depends_on:
+      - nginx
+    networks:
+      - frontend      # để gọi tới nginx:8080
+      - monitoring
+
 volumes:
   db_data:
+  prometheus_data:
+  grafana_data:
 
 networks:
   frontend:
   backend:
+  monitoring:

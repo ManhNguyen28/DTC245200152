@@ -12,3 +12,6 @@ Thumbs.db
 # Chứng chỉ và khóa bí mật SSL - mỗi máy chủ tự tạo bằng nginx/gen-cert.sh
 nginx/certs/*
 !nginx/certs/.gitkeep
+
+# Mật khẩu Basic Auth của Nginx (tạo bằng nginx/gen-htpasswd.sh)
+nginx/auth/

@@ -12,6 +12,7 @@ const { loadUser, requireAdmin } = require('./middleware/auth');
 const authRoutes = require('./routes/auth');
 const publicRoutes = require('./routes/public');
 const adminRoutes = require('./routes/admin');
+const metrics = require('./metrics');
 const { formatDate, formatDuration, score10 } = require('./utils');
 
 const app = express();
@@ -36,21 +37,30 @@ app.locals.score10 = score10;
 // 1. File tĩnh (CSS, JS): trả về ngay, không cần session hay đăng nhập.
 app.use('/static', express.static(path.join(__dirname, '..', 'public'), { maxAge: '1h' }));
 
-// 2. Ghi log mỗi request khi phản hồi xong (phương thức, đường dẫn, mã trạng thái, thời gian xử lý).
+// 2. Khi phản hồi xong: ghi log request (cho Loki) và cập nhật số liệu (cho Prometheus).
 app.use((req, res, next) => {
   const start = process.hrtime.bigint();
   res.on('finish', () => {
-    if (req.path === '/health') return;
+    if (req.path === '/health' || req.path === '/metrics') return;
+    const seconds = Number(process.hrtime.bigint() - start) / 1e9;
+    metrics.observeRequest(req, res, seconds);
     logger.info('http_request', {
       method: req.method,
       path: req.originalUrl,
       status: res.statusCode,
-      duration_ms: Math.round(Number(process.hrtime.bigint() - start) / 1e4) / 100,
+      duration_ms: Math.round(seconds * 1e5) / 100,
       ip: req.ip,
       user: req.user ? req.user.username : undefined,
     });
   });
   next();
+});
+
+// Trang số liệu cho Prometheus. Chỉ truy cập được trong mạng Docker:
+// Nginx chặn đường dẫn /metrics từ bên ngoài.
+app.get('/metrics', async (req, res) => {
+  res.set('Content-Type', metrics.register.contentType);
+  res.send(await metrics.register.metrics());
 });
 
 // 3. Kiểm tra sức khỏe: ứng dụng còn sống và kết nối được CSDL (dùng cho healthcheck/giám sát).

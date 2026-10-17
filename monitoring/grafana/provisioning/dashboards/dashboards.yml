@@ -1,0 +1,12 @@
+# Nạp tự động các dashboard dạng JSON trong thư mục /etc/grafana/dashboards.
+apiVersion: 1
+
+providers:
+  - name: quiz-dashboards
+    folder: "Quiz - Đề 35"
+    type: file
+    disableDeletion: true          # không cho xóa trên giao diện (nguồn gốc là file trong Git)
+    allowUiUpdates: false
+    updateIntervalSeconds: 60
+    options:
+      path: /etc/grafana/dashboards

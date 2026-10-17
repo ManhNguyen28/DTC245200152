@@ -1,0 +1,13 @@
+# Nguồn dữ liệu Grafana được tạo tự động khi khởi động (provisioning).
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    uid: prometheus
+    type: prometheus
+    access: proxy                              # Grafana server gọi Prometheus (trình duyệt không gọi trực tiếp)
+    url: http://prometheus:9090/prometheus     # Prometheus chạy dưới tiền tố /prometheus
+    isDefault: true
+    editable: false
+    jsonData:
+      timeInterval: 15s                        # khớp scrape_interval

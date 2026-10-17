@@ -1,0 +1,120 @@
+{
+  "uid": "quiz-mysql",
+  "title": "2. Cơ sở dữ liệu MySQL",
+  "description": "Giám sát MySQL qua mysqld-exporter - Đề 35, DTC245200152",
+  "tags": ["quiz", "de35", "mysql", "database"],
+  "timezone": "browser",
+  "editable": false,
+  "refresh": "10s",
+  "schemaVersion": 39,
+  "time": { "from": "now-30m", "to": "now" },
+  "panels": [
+    {
+      "type": "stat", "title": "MySQL", "gridPos": { "x": 0, "y": 0, "w": 4, "h": 4 },
+      "description": "mysql_up: mysqld-exporter kết nối được tới MySQL.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "refId": "A", "expr": "mysql_up" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" },
+      "fieldConfig": { "defaults": {
+        "mappings": [{ "type": "value", "options": { "0": { "text": "DOWN", "color": "red" }, "1": { "text": "UP", "color": "green" } } }],
+        "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] } } }
+    },
+    {
+      "type": "stat", "title": "Thời gian hoạt động", "gridPos": { "x": 4, "y": 0, "w": 4, "h": 4 },
+      "description": "mysql_global_status_uptime: số giây kể từ khi MySQL khởi động.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "refId": "A", "expr": "mysql_global_status_uptime" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "none" },
+      "fieldConfig": { "defaults": { "unit": "s" } }
+    },
+    {
+      "type": "stat", "title": "Kết nối đang mở", "gridPos": { "x": 8, "y": 0, "w": 4, "h": 4 },
+      "description": "Threads_connected so với giới hạn max_connections.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "refId": "A", "expr": "mysql_global_status_threads_connected" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "area" },
+      "fieldConfig": { "defaults": { "unit": "none" } }
+    },
+    {
+      "type": "stat", "title": "Truy vấn / giây", "gridPos": { "x": 12, "y": 0, "w": 4, "h": 4 },
+      "description": "rate(mysql_global_status_queries[5m]): số câu lệnh SQL MySQL xử lý mỗi giây.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "refId": "A", "expr": "rate(mysql_global_status_queries[5m])" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "area" },
+      "fieldConfig": { "defaults": { "unit": "qps", "decimals": 2 } }
+    },
+    {
+      "type": "stat", "title": "Truy vấn chậm (tổng)", "gridPos": { "x": 16, "y": 0, "w": 4, "h": 4 },
+      "description": "Slow_queries: số câu lệnh chạy lâu hơn long_query_time (mặc định 10 giây).",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "refId": "A", "expr": "mysql_global_status_slow_queries" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" },
+      "fieldConfig": { "defaults": { "unit": "none",
+        "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 1 }] } } }
+    },
+    {
+      "type": "stat", "title": "Giới hạn kết nối", "gridPos": { "x": 20, "y": 0, "w": 4, "h": 4 },
+      "description": "max_connections: số kết nối tối đa MySQL cho phép.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "refId": "A", "expr": "mysql_global_variables_max_connections" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "none" },
+      "fieldConfig": { "defaults": { "unit": "none" } }
+    },
+    {
+      "type": "timeseries", "title": "Câu lệnh SQL theo loại / giây", "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
+      "description": "Com_select / insert / update / delete: tỉ lệ đọc - ghi của ứng dụng.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "refId": "A", "expr": "sum by (command) (rate(mysql_global_status_commands_total{command=~\"select|insert|update|delete\"}[5m]))", "legendFormat": "{{command}}" }],
+      "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["lastNotNull", "max"] } },
+      "fieldConfig": { "defaults": { "unit": "ops" } }
+    },
+    {
+      "type": "timeseries", "title": "Kết nối & luồng xử lý", "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 },
+      "description": "connected = kết nối đang mở (connection pool của web + exporter + phpMyAdmin); running = đang thực thi lệnh.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "refId": "A", "expr": "mysql_global_status_threads_connected", "legendFormat": "connected" },
+        { "refId": "B", "expr": "mysql_global_status_threads_running", "legendFormat": "running" },
+        { "refId": "C", "expr": "mysql_global_status_max_used_connections", "legendFormat": "max used" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "none" } }
+    },
+    {
+      "type": "timeseries", "title": "Lưu lượng mạng MySQL", "gridPos": { "x": 0, "y": 12, "w": 12, "h": 8 },
+      "description": "Byte nhận (câu lệnh SQL gửi tới) và byte gửi (kết quả trả về) mỗi giây.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "refId": "A", "expr": "rate(mysql_global_status_bytes_received[5m])", "legendFormat": "nhận" },
+        { "refId": "B", "expr": "rate(mysql_global_status_bytes_sent[5m])", "legendFormat": "gửi" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "Bps" } }
+    },
+    {
+      "type": "timeseries", "title": "Kết nối thất bại / bị hủy (số lượt / 5 phút)", "gridPos": { "x": 12, "y": 12, "w": 12, "h": 8 },
+      "description": "aborted_connects tăng = có kết nối sai mật khẩu hoặc không được phép (dấu hiệu dò mật khẩu CSDL).",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "refId": "A", "expr": "increase(mysql_global_status_aborted_connects[5m])", "legendFormat": "aborted connects" },
+        { "refId": "B", "expr": "increase(mysql_global_status_aborted_clients[5m])", "legendFormat": "aborted clients" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "none", "decimals": 0 } }
+    },
+    {
+      "type": "timeseries", "title": "InnoDB buffer pool", "gridPos": { "x": 0, "y": 20, "w": 12, "h": 8 },
+      "description": "Vùng nhớ đệm dữ liệu của InnoDB. read_requests = đọc từ RAM (nhanh); reads = phải đọc từ đĩa (chậm).",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "refId": "A", "expr": "rate(mysql_global_status_innodb_buffer_pool_read_requests[5m])", "legendFormat": "đọc từ RAM" },
+        { "refId": "B", "expr": "rate(mysql_global_status_innodb_buffer_pool_reads[5m])", "legendFormat": "đọc từ đĩa" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "ops" } }
+    },
+    {
+      "type": "timeseries", "title": "Dòng dữ liệu InnoDB / giây", "gridPos": { "x": 12, "y": 20, "w": 12, "h": 8 },
+      "description": "Số dòng được đọc / thêm / sửa / xóa trong các bảng InnoDB.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "refId": "A", "expr": "sum by (operation) (rate(mysql_global_status_innodb_row_ops_total[5m]))", "legendFormat": "{{operation}}" }],
+      "fieldConfig": { "defaults": { "unit": "ops" } }
+    }
+  ]
+}

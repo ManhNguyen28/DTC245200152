@@ -3,6 +3,7 @@
 const crypto = require('crypto');
 const pool = require('../db');
 const logger = require('../logger');
+const metrics = require('../metrics');
 const { OPTIONS } = require('../utils');
 
 // Cho phép nộp trễ tối đa 30 giây so với hạn (bù độ trễ mạng / tự nộp khi hết giờ).
@@ -65,6 +66,7 @@ async function submitAttempt(attemptId, answers, late) {
     await conn.commit();
 
     const result = { attemptId: attempt.id, quizId: attempt.quiz_id, userId: attempt.user_id, score, total: rows.length, late };
+    metrics.submissions.inc({ late: String(Boolean(late)) });
     logger.info('quiz_submitted', {
       attempt_id: attempt.id,
       quiz_id: attempt.quiz_id,
@@ -126,6 +128,7 @@ async function startAttempt(user, quiz) {
      VALUES (?, ?, ?, ?, NOW(), DATE_ADD(NOW(), INTERVAL ? MINUTE))`,
     [quiz.id, user.id, JSON.stringify(order), order.length, quiz.time_limit]
   );
+  metrics.attemptsStarted.inc();
   logger.info('attempt_started', { attempt_id: result.insertId, quiz_id: quiz.id, user_id: user.id });
   return { attemptId: result.insertId, resumed: false };
 }

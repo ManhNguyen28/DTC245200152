@@ -1,0 +1,113 @@
+{
+  "uid": "quiz-containers",
+  "title": "3. Container Docker & Máy chủ",
+  "description": "Tài nguyên từng container (cAdvisor) và máy chủ VM (node-exporter) - Đề 35, DTC245200152",
+  "tags": ["quiz", "de35", "docker", "container", "host"],
+  "timezone": "browser",
+  "editable": false,
+  "refresh": "10s",
+  "schemaVersion": 39,
+  "time": { "from": "now-30m", "to": "now" },
+  "panels": [
+    { "type": "row", "title": "Máy chủ (VM Ubuntu)", "gridPos": { "x": 0, "y": 0, "w": 24, "h": 1 } },
+    {
+      "type": "gauge", "title": "CPU máy chủ", "gridPos": { "x": 0, "y": 1, "w": 5, "h": 5 },
+      "description": "100 - % thời gian CPU nhàn rỗi (mode=idle), trung bình mọi nhân.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "refId": "A", "expr": "100 * (1 - avg(rate(node_cpu_seconds_total{mode=\"idle\"}[2m])))" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100,
+        "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 70 }, { "color": "red", "value": 90 }] } } }
+    },
+    {
+      "type": "gauge", "title": "RAM máy chủ", "gridPos": { "x": 5, "y": 1, "w": 5, "h": 5 },
+      "description": "1 - MemAvailable / MemTotal: phần trăm RAM đang được dùng.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "refId": "A", "expr": "100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100,
+        "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 75 }, { "color": "red", "value": 90 }] } } }
+    },
+    {
+      "type": "gauge", "title": "Ổ đĩa / đã dùng", "gridPos": { "x": 10, "y": 1, "w": 5, "h": 5 },
+      "description": "Phần trăm dung lượng phân vùng gốc (/) đã dùng.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "refId": "A", "expr": "100 * (1 - node_filesystem_avail_bytes{mountpoint=\"/\",fstype!=\"rootfs\"} / node_filesystem_size_bytes{mountpoint=\"/\",fstype!=\"rootfs\"})" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100,
+        "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 80 }, { "color": "red", "value": 90 }] } } }
+    },
+    {
+      "type": "stat", "title": "Container Quiz đang chạy", "gridPos": { "x": 15, "y": 1, "w": 4, "h": 5 },
+      "description": "Số container có tên bắt đầu bằng quiz- mà cAdvisor đang theo dõi.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "refId": "A", "expr": "count(container_memory_working_set_bytes{name=~\"quiz-.+\"})" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "none" },
+      "fieldConfig": { "defaults": { "unit": "none" } }
+    },
+    {
+      "type": "stat", "title": "Máy chủ đã chạy", "gridPos": { "x": 19, "y": 1, "w": 5, "h": 5 },
+      "description": "node_time_seconds - node_boot_time_seconds.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "refId": "A", "expr": "node_time_seconds - node_boot_time_seconds" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "none" },
+      "fieldConfig": { "defaults": { "unit": "s" } }
+    },
+    { "type": "row", "title": "Từng container Docker", "gridPos": { "x": 0, "y": 6, "w": 24, "h": 1 } },
+    {
+      "type": "timeseries", "title": "CPU theo container (% 1 nhân)", "gridPos": { "x": 0, "y": 7, "w": 12, "h": 9 },
+      "description": "rate(container_cpu_usage_seconds_total[2m]) * 100: 100% = dùng hết 1 nhân CPU.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "refId": "A", "expr": "sum by (name) (rate(container_cpu_usage_seconds_total{name=~\"quiz-.+\"}[2m])) * 100", "legendFormat": "{{name}}" }],
+      "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["lastNotNull", "max"], "sortBy": "Last *", "sortDesc": true } },
+      "fieldConfig": { "defaults": { "unit": "percent" } }
+    },
+    {
+      "type": "timeseries", "title": "RAM theo container", "gridPos": { "x": 12, "y": 7, "w": 12, "h": 9 },
+      "description": "container_memory_working_set_bytes: bộ nhớ container thực sự đang dùng (con số Docker dùng để quyết định OOM kill).",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "refId": "A", "expr": "sum by (name) (container_memory_working_set_bytes{name=~\"quiz-.+\"})", "legendFormat": "{{name}}" }],
+      "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["lastNotNull", "max"], "sortBy": "Last *", "sortDesc": true } },
+      "fieldConfig": { "defaults": { "unit": "bytes" } }
+    },
+    {
+      "type": "bargauge", "title": "RAM hiện tại từng container", "gridPos": { "x": 0, "y": 16, "w": 12, "h": 9 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "refId": "A", "expr": "sort_desc(sum by (name) (container_memory_working_set_bytes{name=~\"quiz-.+\"}))", "legendFormat": "{{name}}", "instant": true }],
+      "options": { "orientation": "horizontal", "displayMode": "gradient", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": { "defaults": { "unit": "bytes", "min": 0,
+        "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 300000000 }, { "color": "red", "value": 600000000 }] } } }
+    },
+    {
+      "type": "timeseries", "title": "Mạng theo container (nhận + / gửi -)", "gridPos": { "x": 12, "y": 16, "w": 12, "h": 9 },
+      "description": "Lưu lượng mạng mỗi giây; giá trị âm là chiều gửi đi.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "refId": "A", "expr": "sum by (name) (rate(container_network_receive_bytes_total{name=~\"quiz-.+\"}[2m]))", "legendFormat": "{{name}} nhận" },
+        { "refId": "B", "expr": "-sum by (name) (rate(container_network_transmit_bytes_total{name=~\"quiz-.+\"}[2m]))", "legendFormat": "{{name}} gửi" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "Bps" } }
+    },
+    { "type": "row", "title": "Lịch sử tài nguyên máy chủ", "gridPos": { "x": 0, "y": 25, "w": 24, "h": 1 } },
+    {
+      "type": "timeseries", "title": "CPU & RAM máy chủ theo thời gian", "gridPos": { "x": 0, "y": 26, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "refId": "A", "expr": "100 * (1 - avg(rate(node_cpu_seconds_total{mode=\"idle\"}[2m])))", "legendFormat": "CPU %" },
+        { "refId": "B", "expr": "100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)", "legendFormat": "RAM %" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100 } }
+    },
+    {
+      "type": "timeseries", "title": "Tải hệ thống (load average)", "gridPos": { "x": 12, "y": 26, "w": 12, "h": 8 },
+      "description": "Số tiến trình chờ CPU trung bình. Lớn hơn số nhân CPU (2) = máy chủ quá tải.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "refId": "A", "expr": "node_load1", "legendFormat": "1 phút" },
+        { "refId": "B", "expr": "node_load5", "legendFormat": "5 phút" },
+        { "refId": "C", "expr": "count(node_cpu_seconds_total{mode=\"idle\"})", "legendFormat": "số nhân CPU" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "none" } }
+    }
+  ]
+}

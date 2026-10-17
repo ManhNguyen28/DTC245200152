@@ -1,0 +1,153 @@
+{
+  "uid": "quiz-web",
+  "title": "1. Ứng dụng Quiz & Web server (Nginx)",
+  "description": "Giám sát ứng dụng web Quiz (Node.js) và web server Nginx - Đề 35, DTC245200152",
+  "tags": ["quiz", "de35", "web", "nginx"],
+  "timezone": "browser",
+  "editable": false,
+  "refresh": "10s",
+  "schemaVersion": 39,
+  "time": { "from": "now-30m", "to": "now" },
+  "panels": [
+    { "type": "row", "title": "Tổng quan", "gridPos": { "x": 0, "y": 0, "w": 24, "h": 1 } },
+    {
+      "type": "stat", "title": "Web Quiz", "gridPos": { "x": 0, "y": 1, "w": 4, "h": 4 },
+      "description": "up{job=\"quiz-web\"}: 1 = Prometheus thu thập được số liệu (ứng dụng đang chạy), 0 = mất kết nối.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "refId": "A", "expr": "up{job=\"quiz-web\"}" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" },
+      "fieldConfig": { "defaults": {
+        "mappings": [{ "type": "value", "options": { "0": { "text": "DOWN", "color": "red" }, "1": { "text": "UP", "color": "green" } } }],
+        "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] } } }
+    },
+    {
+      "type": "stat", "title": "Nginx", "gridPos": { "x": 4, "y": 1, "w": 4, "h": 4 },
+      "description": "nginx_up: nginx-exporter đọc được trang stub_status của Nginx.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "refId": "A", "expr": "nginx_up" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" },
+      "fieldConfig": { "defaults": {
+        "mappings": [{ "type": "value", "options": { "0": { "text": "DOWN", "color": "red" }, "1": { "text": "UP", "color": "green" } } }],
+        "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] } } }
+    },
+    {
+      "type": "stat", "title": "Request / giây", "gridPos": { "x": 8, "y": 1, "w": 4, "h": 4 },
+      "description": "sum(rate(quiz_http_requests_total[5m])): tốc độ request trung bình mỗi giây trong 5 phút gần nhất.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "refId": "A", "expr": "sum(rate(quiz_http_requests_total[5m]))" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "area" },
+      "fieldConfig": { "defaults": { "unit": "reqps", "decimals": 2 } }
+    },
+    {
+      "type": "stat", "title": "Độ trễ p95", "gridPos": { "x": 12, "y": 1, "w": 4, "h": 4 },
+      "description": "histogram_quantile(0.95, ...): 95% request được xử lý nhanh hơn giá trị này.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "refId": "A", "expr": "histogram_quantile(0.95, sum by (le) (rate(quiz_http_request_duration_seconds_bucket[5m])))" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "area" },
+      "fieldConfig": { "defaults": { "unit": "s",
+        "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 0.5 }, { "color": "red", "value": 1 }] } } }
+    },
+    {
+      "type": "stat", "title": "Tỉ lệ lỗi 5xx", "gridPos": { "x": 16, "y": 1, "w": 4, "h": 4 },
+      "description": "Phần trăm request trả về mã 5xx (lỗi phía máy chủ) trong 5 phút gần nhất.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "refId": "A", "expr": "sum(rate(quiz_http_requests_total{status=~\"5..\"}[5m])) / clamp_min(sum(rate(quiz_http_requests_total[5m])), 0.001) or vector(0)" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" },
+      "fieldConfig": { "defaults": { "unit": "percentunit", "decimals": 1,
+        "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 0.01 }, { "color": "red", "value": 0.05 }] } } }
+    },
+    {
+      "type": "stat", "title": "Bài đang làm", "gridPos": { "x": 20, "y": 1, "w": 4, "h": 4 },
+      "description": "quiz_attempts_in_progress: số học viên đang làm bài (còn trong thời gian).",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "refId": "A", "expr": "quiz_attempts_in_progress" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "area" },
+      "fieldConfig": { "defaults": { "unit": "none" } }
+    },
+    { "type": "row", "title": "Ứng dụng web Quiz (Node.js)", "gridPos": { "x": 0, "y": 5, "w": 24, "h": 1 } },
+    {
+      "type": "timeseries", "title": "Request / giây theo route", "gridPos": { "x": 0, "y": 6, "w": 12, "h": 8 },
+      "description": "sum by (route) (rate(quiz_http_requests_total[5m])): trang nào được truy cập nhiều nhất.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "refId": "A", "expr": "sum by (route) (rate(quiz_http_requests_total[5m]))", "legendFormat": "{{route}}" }],
+      "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["lastNotNull", "max"] } },
+      "fieldConfig": { "defaults": { "unit": "reqps" } }
+    },
+    {
+      "type": "timeseries", "title": "Request theo mã trạng thái HTTP", "gridPos": { "x": 12, "y": 6, "w": 12, "h": 8 },
+      "description": "2xx thành công, 3xx chuyển hướng, 4xx lỗi phía người dùng (403, 404, 429...), 5xx lỗi máy chủ.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "refId": "A", "expr": "sum by (status) (rate(quiz_http_requests_total[5m]))", "legendFormat": "HTTP {{status}}" }],
+      "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["lastNotNull", "max"] } },
+      "fieldConfig": { "defaults": { "unit": "reqps" } }
+    },
+    {
+      "type": "timeseries", "title": "Độ trễ xử lý request (p50 / p95 / p99)", "gridPos": { "x": 0, "y": 14, "w": 12, "h": 8 },
+      "description": "Tính từ histogram quiz_http_request_duration_seconds. p99 = 99% request nhanh hơn giá trị này.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "refId": "A", "expr": "histogram_quantile(0.50, sum by (le) (rate(quiz_http_request_duration_seconds_bucket[5m])))", "legendFormat": "p50" },
+        { "refId": "B", "expr": "histogram_quantile(0.95, sum by (le) (rate(quiz_http_request_duration_seconds_bucket[5m])))", "legendFormat": "p95" },
+        { "refId": "C", "expr": "histogram_quantile(0.99, sum by (le) (rate(quiz_http_request_duration_seconds_bucket[5m])))", "legendFormat": "p99" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s" } }
+    },
+    {
+      "type": "timeseries", "title": "Hoạt động thi (số lượt / 5 phút)", "gridPos": { "x": 12, "y": 14, "w": 12, "h": 8 },
+      "description": "increase(...[5m]): số sự kiện xảy ra trong 5 phút gần nhất.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "refId": "A", "expr": "sum(increase(quiz_attempts_started_total[5m]))", "legendFormat": "Bắt đầu làm bài" },
+        { "refId": "B", "expr": "sum(increase(quiz_submissions_total{late=\"false\"}[5m]))", "legendFormat": "Nộp bài đúng hạn" },
+        { "refId": "C", "expr": "sum(increase(quiz_submissions_total{late=\"true\"}[5m]))", "legendFormat": "Nộp quá giờ" },
+        { "refId": "D", "expr": "sum(increase(quiz_user_registrations_total[5m]))", "legendFormat": "Đăng ký mới" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "none", "decimals": 0 } }
+    },
+    {
+      "type": "timeseries", "title": "Đăng nhập theo kết quả (số lượt / 5 phút)", "gridPos": { "x": 0, "y": 22, "w": 12, "h": 8 },
+      "description": "failed tăng đột biến = dấu hiệu dò mật khẩu (brute force); blocked = bị khóa tạm sau 5 lần sai.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "refId": "A", "expr": "sum by (result) (increase(quiz_login_attempts_total[5m]))", "legendFormat": "{{result}}" }],
+      "fieldConfig": { "defaults": { "unit": "none", "decimals": 0 },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "success" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }] },
+          { "matcher": { "id": "byName", "options": "failed" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "orange" } }] },
+          { "matcher": { "id": "byName", "options": "blocked" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }] }
+        ] }
+    },
+    {
+      "type": "timeseries", "title": "Tiến trình Node.js: bộ nhớ & event loop", "gridPos": { "x": 12, "y": 22, "w": 12, "h": 8 },
+      "description": "RSS = bộ nhớ thực tiến trình đang dùng. Event loop lag cao = ứng dụng bị nghẽn, phản hồi chậm.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "refId": "A", "expr": "process_resident_memory_bytes{job=\"quiz-web\"}", "legendFormat": "Bộ nhớ (RSS)" },
+        { "refId": "B", "expr": "nodejs_heap_size_used_bytes{job=\"quiz-web\"}", "legendFormat": "Heap đang dùng" },
+        { "refId": "C", "expr": "nodejs_eventloop_lag_p99_seconds{job=\"quiz-web\"}", "legendFormat": "Event loop lag p99" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "bytes" },
+        "overrides": [{ "matcher": { "id": "byName", "options": "Event loop lag p99" },
+          "properties": [{ "id": "unit", "value": "s" }, { "id": "custom.axisPlacement", "value": "right" }] }] }
+    },
+    { "type": "row", "title": "Web server Nginx", "gridPos": { "x": 0, "y": 30, "w": 24, "h": 1 } },
+    {
+      "type": "timeseries", "title": "Nginx: request / giây", "gridPos": { "x": 0, "y": 31, "w": 12, "h": 8 },
+      "description": "rate(nginx_http_requests_total[5m]): tổng request Nginx nhận (gồm cả /grafana, /phpmyadmin, file tĩnh).",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "refId": "A", "expr": "rate(nginx_http_requests_total[5m])", "legendFormat": "Request/giây" }],
+      "fieldConfig": { "defaults": { "unit": "reqps" } }
+    },
+    {
+      "type": "timeseries", "title": "Nginx: kết nối", "gridPos": { "x": 12, "y": 31, "w": 12, "h": 8 },
+      "description": "active = đang mở; reading = đang đọc request; writing = đang gửi phản hồi; waiting = keep-alive chờ request tiếp.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "refId": "A", "expr": "nginx_connections_active", "legendFormat": "active" },
+        { "refId": "B", "expr": "nginx_connections_reading", "legendFormat": "reading" },
+        { "refId": "C", "expr": "nginx_connections_writing", "legendFormat": "writing" },
+        { "refId": "D", "expr": "nginx_connections_waiting", "legendFormat": "waiting" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "none" } }
+    }
+  ]
+}

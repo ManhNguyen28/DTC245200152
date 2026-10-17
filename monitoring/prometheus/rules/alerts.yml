@@ -1,0 +1,70 @@
+# Luật cảnh báo: Prometheus đánh giá biểu thức (expr) mỗi 15 giây.
+# Điều kiện đúng liên tục trong khoảng "for" -> cảnh báo chuyển sang FIRING (xem tại trang Alerts).
+groups:
+  - name: quiz-availability
+    rules:
+      - alert: TargetDown
+        expr: up == 0
+        for: 1m
+        labels: { severity: critical }
+        annotations:
+          summary: "Mất kết nối tới {{ $labels.job }} ({{ $labels.instance }})"
+          description: "Prometheus không thu thập được số liệu từ {{ $labels.job }} trong hơn 1 phút."
+
+      - alert: MySQLDown
+        expr: mysql_up == 0
+        for: 30s
+        labels: { severity: critical }
+        annotations:
+          summary: "MySQL không phản hồi"
+          description: "mysqld-exporter không kết nối được tới CSDL."
+
+  - name: quiz-application
+    rules:
+      - alert: HighHttpErrorRate
+        expr: |
+          sum(rate(quiz_http_requests_total{status=~"5.."}[5m]))
+            / clamp_min(sum(rate(quiz_http_requests_total[5m])), 0.001) > 0.05
+        for: 2m
+        labels: { severity: warning }
+        annotations:
+          summary: "Tỉ lệ lỗi 5xx của web Quiz cao ({{ $value | humanizePercentage }})"
+
+      - alert: SlowResponses
+        expr: |
+          histogram_quantile(0.95, sum by (le) (rate(quiz_http_request_duration_seconds_bucket[5m]))) > 1
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "95% request của web Quiz chậm hơn {{ $value | humanizeDuration }}"
+
+      - alert: LoginBruteForce
+        expr: sum(increase(quiz_login_attempts_total{result=~"failed|blocked"}[5m])) > 20
+        labels: { severity: warning }
+        annotations:
+          summary: "Nghi ngờ dò mật khẩu: {{ $value }} lần đăng nhập sai/bị chặn trong 5 phút"
+
+  - name: quiz-resources
+    rules:
+      - alert: HostLowDiskSpace
+        expr: node_filesystem_avail_bytes{mountpoint="/",fstype!="rootfs"} / node_filesystem_size_bytes{mountpoint="/",fstype!="rootfs"} < 0.10
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "Ổ đĩa máy chủ còn dưới 10% ({{ $value | humanizePercentage }})"
+
+      - alert: HostHighMemory
+        expr: 1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes > 0.90
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "RAM máy chủ dùng trên 90%"
+
+      - alert: ContainerHighMemory
+        expr: |
+          container_memory_working_set_bytes{name=~"quiz-.+"}
+            / (container_spec_memory_limit_bytes{name=~"quiz-.+"} > 0) > 0.90
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "Container {{ $labels.name }} dùng trên 90% giới hạn RAM"

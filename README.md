@@ -33,6 +33,7 @@ chống CSV injection, truy vấn tham số hóa (chống SQL injection), escape
 | Cơ sở dữ liệu | MySQL 8.0 (phiên đăng nhập cũng lưu trong MySQL) |
 | Quản lý CSDL | phpMyAdmin 5.2 |
 | Reverse proxy | Nginx (HTTPS tự ký, TLS 1.2/1.3, security headers, rate limiting) |
+| Giám sát | Prometheus, Grafana, cAdvisor, node-exporter, mysqld-exporter, nginx-prometheus-exporter, prom-client |
 | Triển khai | Docker, Docker Compose |
 
 ## Kiến trúc
@@ -48,6 +49,30 @@ Người dùng ──https:443──▶ nginx ──▶ web (Node.js :3000) ─�
 - Security headers: HSTS, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy,
   Cross-Origin-Opener-Policy, Content-Security-Policy; ẩn phiên bản Nginx (`server_tokens off`).
 - Giới hạn 20 lần gửi form đăng nhập/phút/IP ở Nginx (thêm vào bộ khóa đăng nhập sai của ứng dụng).
+
+## Giám sát (Prometheus + Grafana)
+
+```
+web (/metrics) ──────────────┐
+nginx ─stub_status─▶ nginx-exporter ──┤
+MySQL ──▶ mysqld-exporter ───────┤──(Prometheus thu thập mỗi 15s)──▶ PROMETHEUS ──▶ GRAFANA (3 dashboard)
+container ──▶ cAdvisor ──────────┤                                    └─ 8 luật cảnh báo
+máy chủ ──▶ node-exporter ───────┘
+```
+
+| Nguồn | Exporter | Số liệu chính |
+|---|---|---|
+| Ứng dụng Quiz | `prom-client` (tích hợp trong code) | request/giây theo route, độ trễ p50/p95/p99, mã trạng thái, bài nộp, đăng nhập thành công/sai/bị khóa, bài đang làm |
+| Web server | nginx-prometheus-exporter (đọc `stub_status` cổng 8080 nội bộ) | request/giây, kết nối active/reading/writing/waiting |
+| Cơ sở dữ liệu | mysqld-exporter (user `exporter` chỉ có quyền PROCESS, REPLICATION CLIENT, SELECT performance_schema) | kết nối, truy vấn/giây theo loại, truy vấn chậm, kết nối bị từ chối, InnoDB |
+| Container | cAdvisor | CPU, RAM, mạng từng container |
+| Máy chủ | node-exporter | CPU, RAM, ổ đĩa, load average |
+
+- Dashboard và nguồn dữ liệu Grafana được **provisioning** từ file (`monitoring/grafana/`), không cấu hình tay.
+- Luật cảnh báo (`monitoring/prometheus/rules/alerts.yml`): mất kết nối target, MySQL down, lỗi 5xx > 5%,
+  p95 > 1s, nghi ngờ dò mật khẩu, ổ đĩa < 10%, RAM > 90%.
+- Prometheus giữ số liệu 7 ngày, tối đa 300 MB. Trang `/prometheus/` được Nginx bảo vệ bằng Basic Auth;
+  `/metrics` của ứng dụng bị chặn từ bên ngoài.
 
 ## Cấu trúc thư mục
 
@@ -74,7 +99,13 @@ DTC245200152/
 │   ├── snippets/               # proxy.conf (header chuyển tiếp), security-headers.conf
 │   ├── gen-cert.sh             # Tạo chứng chỉ SSL tự ký
 │   └── certs/                  # server.crt, server.key (tự tạo, không đưa lên Git)
-├── tests/e2e-test.sh           # Kiểm thử tự động 45 kịch bản (chức năng + bảo mật)
+│   ├── gen-htpasswd.sh         # Tạo mật khẩu Basic Auth cho /prometheus/
+├── monitoring/
+│   ├── prometheus/             # prometheus.yml (6 nguồn thu thập), rules/alerts.yml (8 luật cảnh báo)
+│   └── grafana/                # provisioning (datasource, dashboard provider) + dashboards/*.json
+├── tests/
+│   ├── e2e-test.sh             # Kiểm thử tự động 45 kịch bản (chức năng + bảo mật)
+│   └── demo-traffic.sh         # Mô phỏng buổi thi: 6 học viên demo, 18 bài nộp, đăng nhập sai
 ├── docker-compose.yml
 ├── .env.example                # Mẫu biến môi trường
 └── README.md
@@ -93,8 +124,9 @@ cd DTC245200152
 cp .env.example .env
 #    SESSION_SECRET có thể tạo bằng: openssl rand -hex 32
 
-# 3. Tạo chứng chỉ SSL tự ký cho địa chỉ máy chủ
+# 3. Tạo chứng chỉ SSL tự ký cho địa chỉ máy chủ và mật khẩu Basic Auth cho /prometheus/
 sh nginx/gen-cert.sh 192.168.146.128
+sh nginx/gen-htpasswd.sh
 
 # 4. Build và khởi chạy toàn bộ hệ thống
 docker compose up -d --build
@@ -116,6 +148,8 @@ Thay `<IP>` bằng địa chỉ máy chủ (ví dụ `192.168.146.128`, hoặc `
 | Website Quiz | https://&lt;IP&gt;/ | Tự đăng ký tài khoản học viên |
 | Trang quản trị | https://&lt;IP&gt;/admin | `ADMIN_USER` / `ADMIN_PASSWORD` trong `.env` |
 | phpMyAdmin | https://&lt;IP&gt;/phpmyadmin/ | `MYSQL_USER` / `MYSQL_PASSWORD` trong `.env` |
+| Grafana (3 dashboard) | https://&lt;IP&gt;/grafana/ | `MONITOR_USER` / `MONITOR_PASSWORD` trong `.env` |
+| Prometheus | https://&lt;IP&gt;/prometheus/ | `MONITOR_USER` / `MONITOR_PASSWORD` (Basic Auth) |
 | Health check ứng dụng | https://&lt;IP&gt;/health | – |
 | Health check Nginx | http://&lt;IP&gt;/nginx-health | – |
 
@@ -129,6 +163,9 @@ Tài khoản admin được ứng dụng tạo tự động ở lần khởi đ�
 ```bash
 docker compose down -v && docker compose up -d   # CSDL sạch
 bash tests/e2e-test.sh                             # 45 kịch bản, in ĐẠT/LỖI cho từng kịch bản
+
+# Tạo dữ liệu demo (6 học viên hv01..hv06, mật khẩu HocVien2026) cho bảng xếp hạng và dashboard
+bash tests/demo-traffic.sh
 ```
 
 ## Lệnh hữu ích

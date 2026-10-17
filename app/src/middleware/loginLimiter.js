@@ -1,6 +1,7 @@
 'use strict';
 
 const logger = require('../logger');
+const metrics = require('../metrics');
 
 const MAX_FAILURES = 5;
 const WINDOW_MS = 15 * 60 * 1000;
@@ -22,6 +23,7 @@ function check(req, res, next) {
   if (list.length < MAX_FAILURES) return next();
 
   const waitMinutes = Math.ceil((WINDOW_MS - (Date.now() - list[0])) / 60000);
+  metrics.loginAttempts.inc({ result: 'blocked' });
   logger.warn('login_blocked', { ip: req.ip, username: req.body && req.body.username });
   return res.status(429).render('login', {
     title: 'Đăng nhập',

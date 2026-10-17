@@ -1,0 +1,51 @@
+# =====================================================================
+# Prometheus - thu thập số liệu (metrics) theo mô hình PULL:
+# cứ mỗi scrape_interval, Prometheus chủ động gọi HTTP tới /metrics của từng "target".
+# Tên máy (web, cadvisor...) là tên service trong docker-compose (Docker DNS tự phân giải).
+# =====================================================================
+global:
+  scrape_interval: 15s       # bao lâu thu thập một lần
+  evaluation_interval: 15s   # bao lâu đánh giá luật cảnh báo một lần
+  external_labels:
+    system: quiz-de35
+
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
+scrape_configs:
+  # Chính Prometheus (chạy dưới đường dẫn /prometheus do đi qua Nginx)
+  - job_name: prometheus
+    metrics_path: /prometheus/metrics
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Ứng dụng web Quiz (Node.js + prom-client): request, độ trễ, bài nộp, đăng nhập...
+  - job_name: quiz-web
+    static_configs:
+      - targets: ['web:3000']
+        labels: { tier: app }
+
+  # Web server Nginx (qua nginx-prometheus-exporter đọc trang stub_status)
+  - job_name: nginx
+    static_configs:
+      - targets: ['nginx-exporter:9113']
+        labels: { tier: web }
+
+  # Cơ sở dữ liệu MySQL (qua mysqld-exporter)
+  - job_name: mysql
+    static_configs:
+      - targets: ['mysqld-exporter:9104']
+        labels: { tier: database }
+
+  # Từng container Docker: CPU, RAM, mạng, đĩa (qua cAdvisor)
+  - job_name: cadvisor
+    scrape_interval: 30s
+    static_configs:
+      - targets: ['cadvisor:8080']
+        labels: { tier: container }
+
+  # Máy chủ (VM Ubuntu): CPU, RAM, ổ đĩa, tải hệ thống (qua node-exporter)
+  - job_name: node
+    static_configs:
+      - targets: ['node-exporter:9100']
+        labels: { tier: host }
