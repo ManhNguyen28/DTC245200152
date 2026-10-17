@@ -34,6 +34,7 @@ chống CSV injection, truy vấn tham số hóa (chống SQL injection), escape
 | Quản lý CSDL | phpMyAdmin 5.2 |
 | Reverse proxy | Nginx (HTTPS tự ký, TLS 1.2/1.3, security headers, rate limiting) |
 | Giám sát | Prometheus, Grafana, cAdvisor, node-exporter, mysqld-exporter, nginx-prometheus-exporter, prom-client |
+| Log tập trung | Loki 3.7, Promtail 3.6 (Docker service discovery), LogQL |
 | Triển khai | Docker, Docker Compose |
 
 ## Kiến trúc
@@ -74,6 +75,35 @@ máy chủ ──▶ node-exporter ───────┘
 - Prometheus giữ số liệu 7 ngày, tối đa 300 MB. Trang `/prometheus/` được Nginx bảo vệ bằng Basic Auth;
   `/metrics` của ứng dụng bị chặn từ bên ngoài.
 
+## Log tập trung (Loki + Promtail)
+
+```
+12 container ──stdout/stderr──▶ PROMTAIL ──(gắn nhãn, đẩy log)──▶ LOKI ◀──LogQL── GRAFANA (Explore, dashboard 4)
+               (Docker json-file, xoay vòng 3 x 10 MB)
+```
+
+- **Promtail** dùng Docker service discovery: tự phát hiện mọi container của project `dtc245200152`, đọc log và
+  gắn nhãn `service`, `container`, `stream`; log Nginx tách `log_type` = `access` (JSON) / `error` / `system`;
+  log ứng dụng (JSON) được gắn nhãn `level` (info / warn / error).
+- **Loki** chỉ đánh chỉ mục theo nhãn, lưu log 7 ngày (compactor tự xóa log cũ), chỉ truy cập được trong mạng Docker.
+- Ứng dụng và Nginx đều ghi log **dạng JSON** nên LogQL tách được từng trường bằng `| json`.
+
+### Các truy vấn LogQL (Grafana → Explore → chọn nguồn **Loki**)
+
+| # | Câu hỏi vận hành | LogQL |
+|---|---|---|
+| 1 | Những lần đăng nhập sai gần đây: tài khoản nào, từ IP nào? | `{service="web"} \| json \| msg="login_failed" \| line_format "user={{.username}} ip={{.ip}}"` |
+| 2 | Request nào bị Nginx trả lỗi 4xx/5xx (phát hiện dò thám)? | `{service="nginx", log_type="access"} \| json \| status >= 400` |
+| 3 | Đếm request theo mã trạng thái trong 1 giờ (truy vấn số liệu) | `sum by (status) (count_over_time({service="nginx", log_type="access"} \| json status \| __error__="" [1h]))` |
+| 4 | IP nào đăng nhập sai nhiều nhất (phát hiện dò mật khẩu)? | `topk(5, sum by (ip, username) (count_over_time({service="web"} \| json msg, ip, username \| msg="login_failed" [1h])))` |
+| 5 | Bài nộp điểm thấp (dưới 3) để hỗ trợ học viên | `{service="web"} \| json \| msg="quiz_submitted" \| score < 3` |
+| 6 | Request xử lý chậm (> 20 ms) | `{service="web"} \| json \| msg="http_request" \| duration_ms > 20` |
+| 7 | Lỗi của ứng dụng (lọc nhanh bằng nhãn) | `{service="web", level="error"}` |
+| 8 | Lỗi/cảnh báo của mọi container | `{system="quiz-de35"} \|~ "(?i)error\|warn\|fail"` |
+
+Ghi chú: `| json status` chỉ tách trường cần dùng (tránh tạo quá nhiều chuỗi khi đếm);
+`| __error__=""` bỏ qua dòng không phải JSON.
+
 ## Cấu trúc thư mục
 
 ```
@@ -101,8 +131,10 @@ DTC245200152/
 │   └── certs/                  # server.crt, server.key (tự tạo, không đưa lên Git)
 │   ├── gen-htpasswd.sh         # Tạo mật khẩu Basic Auth cho /prometheus/
 ├── monitoring/
-│   ├── prometheus/             # prometheus.yml (6 nguồn thu thập), rules/alerts.yml (8 luật cảnh báo)
-│   └── grafana/                # provisioning (datasource, dashboard provider) + dashboards/*.json
+│   ├── prometheus/             # prometheus.yml (8 nguồn thu thập), rules/alerts.yml (8 luật cảnh báo)
+│   ├── loki/                   # loki-config.yaml (lưu log 7 ngày)
+│   ├── promtail/               # promtail-config.yaml (Docker service discovery, gắn nhãn)
+│   └── grafana/                # provisioning (Prometheus + Loki) + dashboards/*.json (4 dashboard)
 ├── tests/
 │   ├── e2e-test.sh             # Kiểm thử tự động 45 kịch bản (chức năng + bảo mật)
 │   └── demo-traffic.sh         # Mô phỏng buổi thi: 6 học viên demo, 18 bài nộp, đăng nhập sai
@@ -148,7 +180,7 @@ Thay `<IP>` bằng địa chỉ máy chủ (ví dụ `192.168.146.128`, hoặc `
 | Website Quiz | https://&lt;IP&gt;/ | Tự đăng ký tài khoản học viên |
 | Trang quản trị | https://&lt;IP&gt;/admin | `ADMIN_USER` / `ADMIN_PASSWORD` trong `.env` |
 | phpMyAdmin | https://&lt;IP&gt;/phpmyadmin/ | `MYSQL_USER` / `MYSQL_PASSWORD` trong `.env` |
-| Grafana (3 dashboard) | https://&lt;IP&gt;/grafana/ | `MONITOR_USER` / `MONITOR_PASSWORD` trong `.env` |
+| Grafana (4 dashboard + Explore/LogQL) | https://&lt;IP&gt;/grafana/ | `MONITOR_USER` / `MONITOR_PASSWORD` trong `.env` |
 | Prometheus | https://&lt;IP&gt;/prometheus/ | `MONITOR_USER` / `MONITOR_PASSWORD` (Basic Auth) |
 | Health check ứng dụng | https://&lt;IP&gt;/health | – |
 | Health check Nginx | http://&lt;IP&gt;/nginx-health | – |

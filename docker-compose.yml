@@ -7,7 +7,16 @@
 # Chỉ nginx mở cổng ra ngoài. Ba mạng tách biệt:
 #   frontend  : nginx <-> web, phpmyadmin, grafana, prometheus, nginx-exporter
 #   backend   : web, phpmyadmin, mysqld-exporter <-> db   (nginx KHÔNG nằm trong mạng này -> không chạm được CSDL)
-#   monitoring: prometheus <-> các exporter, web (/metrics); grafana -> prometheus
+#   monitoring: prometheus <-> các exporter, web (/metrics); grafana -> prometheus, loki; promtail -> loki
+
+# Xoay vòng log của Docker cho MỌI container: tối đa 3 file x 10 MB.
+# Mặc định file log lớn không giới hạn -> có thể làm đầy ổ đĩa máy chủ.
+# (Log vẫn được lưu lâu dài, có tổ chức trong Loki.)
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
 
 services:
   # ---------- Reverse proxy: cổng vào duy nhất ----------
@@ -15,6 +24,7 @@ services:
     image: nginx:alpine
     container_name: quiz-nginx
     restart: unless-stopped
+    logging: *default-logging
     ports:
       - "80:80"     # HTTP  -> chuyển hướng sang HTTPS
       - "443:443"   # HTTPS
@@ -37,6 +47,7 @@ services:
     image: quiz-web:1.0
     container_name: quiz-web
     restart: unless-stopped
+    logging: *default-logging
     environment:
       PORT: 3000
       DB_HOST: db
@@ -64,6 +75,7 @@ services:
     image: mysql:8.0
     container_name: quiz-db
     restart: unless-stopped
+    logging: *default-logging
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: ${MYSQL_DATABASE}
@@ -90,6 +102,7 @@ services:
     image: phpmyadmin:5.2
     container_name: quiz-phpmyadmin
     restart: unless-stopped
+    logging: *default-logging
     environment:
       PMA_HOST: db
       PMA_PORT: 3306
@@ -110,6 +123,7 @@ services:
     image: prom/prometheus:latest
     container_name: quiz-prometheus
     restart: unless-stopped
+    logging: *default-logging
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
@@ -131,6 +145,7 @@ services:
     image: grafana/grafana:latest
     container_name: quiz-grafana
     restart: unless-stopped
+    logging: *default-logging
     environment:
       GF_SERVER_DOMAIN: ${PUBLIC_HOST}
       GF_SERVER_ROOT_URL: https://${PUBLIC_HOST}/grafana/
@@ -163,6 +178,7 @@ services:
     image: gcr.io/cadvisor/cadvisor:latest
     container_name: quiz-cadvisor
     restart: unless-stopped
+    logging: *default-logging
     privileged: true    # NGOẠI LỆ có chủ đích: cần đọc cgroup của mọi container; không mở cổng ra ngoài
     devices:
       - /dev/kmsg
@@ -187,6 +203,7 @@ services:
     image: prom/node-exporter:latest
     container_name: quiz-node-exporter
     restart: unless-stopped
+    logging: *default-logging
     pid: host
     command:
       - --path.rootfs=/host
@@ -202,6 +219,7 @@ services:
     image: prom/mysqld-exporter:latest
     container_name: quiz-mysqld-exporter
     restart: unless-stopped
+    logging: *default-logging
     command:
       - --mysqld.address=db:3306
       - --mysqld.username=exporter
@@ -221,6 +239,7 @@ services:
     image: nginx/nginx-prometheus-exporter:1.4.2
     container_name: quiz-nginx-exporter
     restart: unless-stopped
+    logging: *default-logging
     command:
       - --nginx.scrape-uri=http://nginx:8080/stub_status
     expose:
@@ -231,10 +250,47 @@ services:
       - frontend      # để gọi tới nginx:8080
       - monitoring
 
+  # =================== LOG TẬP TRUNG (Loki + Promtail) ===================
+
+  # ---------- Loki: lưu trữ log tập trung, truy vấn bằng LogQL ----------
+  loki:
+    image: grafana/loki:3.7.8
+    container_name: quiz-loki
+    restart: unless-stopped
+    logging: *default-logging
+    command: -config.file=/etc/loki/loki-config.yaml
+    volumes:
+      - ./monitoring/loki/loki-config.yaml:/etc/loki/loki-config.yaml:ro
+      - loki_data:/loki
+    expose:
+      - "3100"
+    networks:
+      - monitoring    # chỉ Promtail (đẩy log) và Grafana (truy vấn) kết nối tới
+
+  # ---------- Promtail: thu gom log mọi container của dự án, đẩy về Loki ----------
+  promtail:
+    image: grafana/promtail:3.6.8
+    container_name: quiz-promtail
+    restart: unless-stopped
+    logging: *default-logging
+    command: -config.file=/etc/promtail/promtail-config.yaml
+    volumes:
+      - ./monitoring/promtail/promtail-config.yaml:/etc/promtail/promtail-config.yaml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro   # hỏi Docker danh sách container và đọc log
+      - promtail_data:/var/lib/promtail                  # vị trí đã đọc (không gửi trùng khi khởi động lại)
+    expose:
+      - "9080"
+    depends_on:
+      - loki
+    networks:
+      - monitoring
+
 volumes:
   db_data:
   prometheus_data:
   grafana_data:
+  loki_data:
+  promtail_data:
 
 networks:
   frontend:

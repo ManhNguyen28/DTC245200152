@@ -1,0 +1,63 @@
+# =====================================================================
+# Loki - kho lưu trữ log tập trung (chế độ đơn - single binary, lưu trên ổ đĩa).
+# Loki chỉ đánh chỉ mục (index) theo NHÃN (service, container...), không đánh chỉ mục nội dung log
+# -> nhẹ, tốn ít dung lượng; nội dung được lọc lúc truy vấn bằng LogQL.
+# Loki chỉ nhận kết nối trong mạng Docker "monitoring" (không mở ra ngoài) nên không bật xác thực.
+# =====================================================================
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+  grpc_listen_port: 9096
+  log_level: warn
+
+common:
+  instance_addr: 127.0.0.1
+  path_prefix: /loki
+  storage:
+    filesystem:
+      chunks_directory: /loki/chunks
+      rules_directory: /loki/rules
+  replication_factor: 1
+  ring:
+    kvstore:
+      store: inmemory
+
+# Cách tổ chức dữ liệu: chỉ mục TSDB, mỗi ngày một bảng chỉ mục.
+schema_config:
+  configs:
+    - from: 2024-01-01
+      store: tsdb
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: index_
+        period: 24h
+
+limits_config:
+  retention_period: 168h              # giữ log 7 ngày (khớp với Prometheus)
+  reject_old_samples: true
+  reject_old_samples_max_age: 168h
+  ingestion_rate_mb: 4                # giới hạn tốc độ nhận log, chống một container "xả" log làm nghẽn
+  ingestion_burst_size_mb: 8
+  max_query_lookback: 168h
+  allow_structured_metadata: true
+  volume_enabled: true
+
+# Compactor: gộp chỉ mục và XÓA log quá hạn retention_period (không bật thì log giữ mãi).
+compactor:
+  working_directory: /loki/compactor
+  compaction_interval: 10m
+  retention_enabled: true
+  retention_delete_delay: 2h
+  delete_request_store: filesystem
+
+query_range:
+  results_cache:
+    cache:
+      embedded_cache:
+        enabled: true
+        max_size_mb: 50
+
+analytics:
+  reporting_enabled: false            # không gửi thống kê sử dụng ra Internet

@@ -1,0 +1,92 @@
+{
+  "uid": "quiz-logs",
+  "title": "4. Nhật ký hệ thống (Loki)",
+  "description": "Log tập trung của mọi container qua Promtail + Loki, truy vấn bằng LogQL - Đề 35, DTC245200152",
+  "tags": ["quiz", "de35", "loki", "logs"],
+  "timezone": "browser",
+  "editable": false,
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "time": { "from": "now-1h", "to": "now" },
+  "panels": [
+    {
+      "type": "timeseries", "title": "Số dòng log theo service (mỗi phút)", "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "description": "LogQL: sum by (service) (count_over_time({system=\"quiz-de35\"}[1m])) - đếm số dòng log mỗi service sinh ra.",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "targets": [{ "refId": "A", "expr": "sum by (service) (count_over_time({system=\"quiz-de35\"}[1m]))", "legendFormat": "{{service}}" }],
+      "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["sum"] } },
+      "fieldConfig": { "defaults": { "unit": "none", "custom": { "drawStyle": "bars", "fillOpacity": 60, "stacking": { "mode": "normal" } } } }
+    },
+    {
+      "type": "timeseries", "title": "Nginx: request theo mã trạng thái (mỗi phút)", "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "description": "LogQL: sum by (status) (count_over_time({service=\"nginx\", log_type=\"access\"} | json status | __error__=\"\" [1m])) - parser json tách trường status từ access log.",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "targets": [{ "refId": "A", "expr": "sum by (status) (count_over_time({service=\"nginx\", log_type=\"access\"} | json status | __error__=\"\" [1m]))", "legendFormat": "HTTP {{status}}" }],
+      "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["sum"] } },
+      "fieldConfig": { "defaults": { "unit": "none", "custom": { "drawStyle": "bars", "fillOpacity": 60, "stacking": { "mode": "normal" } } } }
+    },
+    {
+      "type": "stat", "title": "Lỗi ứng dụng (1 giờ)", "gridPos": { "x": 0, "y": 8, "w": 6, "h": 5 },
+      "description": "LogQL: sum(count_over_time({service=\"web\", level=\"error\"}[1h]))",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "targets": [{ "refId": "A", "expr": "sum(count_over_time({service=\"web\", level=\"error\"}[1h])) or vector(0)", "instant": true }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" },
+      "fieldConfig": { "defaults": { "unit": "none",
+        "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] } } }
+    },
+    {
+      "type": "stat", "title": "Đăng nhập sai (1 giờ)", "gridPos": { "x": 6, "y": 8, "w": 6, "h": 5 },
+      "description": "LogQL: sum(count_over_time({service=\"web\"} |= \"login_failed\" [1h]))",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "targets": [{ "refId": "A", "expr": "sum(count_over_time({service=\"web\"} |= \"login_failed\" [1h])) or vector(0)", "instant": true }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" },
+      "fieldConfig": { "defaults": { "unit": "none",
+        "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 5 }, { "color": "red", "value": 20 }] } } }
+    },
+    {
+      "type": "stat", "title": "Request Nginx lỗi 4xx/5xx (1 giờ)", "gridPos": { "x": 12, "y": 8, "w": 6, "h": 5 },
+      "description": "LogQL: sum(count_over_time({service=\"nginx\", log_type=\"access\"} | json status | __error__=\"\" | status >= 400 [1h]))",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "targets": [{ "refId": "A", "expr": "sum(count_over_time({service=\"nginx\", log_type=\"access\"} | json status | __error__=\"\" | status >= 400 [1h])) or vector(0)", "instant": true }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" },
+      "fieldConfig": { "defaults": { "unit": "none",
+        "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 10 }] } } }
+    },
+    {
+      "type": "stat", "title": "Bài nộp (1 giờ)", "gridPos": { "x": 18, "y": 8, "w": 6, "h": 5 },
+      "description": "LogQL: sum(count_over_time({service=\"web\"} | json msg | msg=\"quiz_submitted\" [1h]))",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "targets": [{ "refId": "A", "expr": "sum(count_over_time({service=\"web\"} | json msg | msg=\"quiz_submitted\" [1h])) or vector(0)", "instant": true }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "none" },
+      "fieldConfig": { "defaults": { "unit": "none" } }
+    },
+    {
+      "type": "table", "title": "Top IP đăng nhập sai (1 giờ)", "gridPos": { "x": 0, "y": 13, "w": 8, "h": 8 },
+      "description": "LogQL: topk(10, sum by (ip, username) (count_over_time({service=\"web\"} | json msg, ip, username | msg=\"login_failed\" [1h])))",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "targets": [{ "refId": "A", "expr": "topk(10, sum by (ip, username) (count_over_time({service=\"web\"} | json msg, ip, username | msg=\"login_failed\" [1h])))", "instant": true, "format": "table" }],
+      "transformations": [{ "id": "organize", "options": { "excludeByName": { "Time": true }, "renameByName": { "ip": "IP", "username": "Tài khoản bị thử", "Value #A": "Số lần sai" } } }]
+    },
+    {
+      "type": "logs", "title": "Sự kiện bảo mật (đăng nhập sai / bị khóa / CSRF / quyền admin)", "gridPos": { "x": 8, "y": 13, "w": 16, "h": 8 },
+      "description": "LogQL: {service=\"web\"} | json | msg=~\"login_failed|login_blocked|csrf_rejected|admin_.*\" | line_format ...",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "targets": [{ "refId": "A", "expr": "{service=\"web\"} | json | msg=~\"login_failed|login_blocked|csrf_rejected|admin_.*\" | line_format \"{{.msg}}  user={{.username}}  ip={{.ip}}\"" }],
+      "options": { "showTime": true, "wrapLogMessage": true, "sortOrder": "Descending", "enableLogDetails": true }
+    },
+    {
+      "type": "logs", "title": "Bài nộp gần đây", "gridPos": { "x": 0, "y": 21, "w": 12, "h": 9 },
+      "description": "LogQL: {service=\"web\"} | json | msg=\"quiz_submitted\" | line_format - định dạng lại dòng log cho dễ đọc.",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "targets": [{ "refId": "A", "expr": "{service=\"web\"} | json | msg=\"quiz_submitted\" | line_format \"Đề {{.quiz_id}} - user_id {{.user_id}} - điểm {{.score}}/{{.total}} - nộp trễ: {{.late}}\"" }],
+      "options": { "showTime": true, "wrapLogMessage": true, "sortOrder": "Descending" }
+    },
+    {
+      "type": "logs", "title": "Log lỗi & cảnh báo của mọi container", "gridPos": { "x": 12, "y": 21, "w": 12, "h": 9 },
+      "description": "LogQL: {system=\"quiz-de35\"} |~ \"(?i)error|warn|fail\" != \"login_failed\" - lọc theo biểu thức chính quy, không phân biệt hoa thường.",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "targets": [{ "refId": "A", "expr": "{system=\"quiz-de35\"} |~ \"(?i)error|warn|fail\" != \"login_failed\" != \"login_blocked\"" }],
+      "options": { "showTime": true, "wrapLogMessage": true, "sortOrder": "Descending", "enableLogDetails": true }
+    }
+  ]
+}
