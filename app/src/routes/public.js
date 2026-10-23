@@ -1,11 +1,15 @@
 'use strict';
 
 const express = require('express');
+const bcrypt = require('bcryptjs');
 const pool = require('../db');
+const logger = require('../logger');
 const { requireLogin } = require('../middleware/auth');
 const { GRACE_SECONDS, startAttempt, submitAttempt, finalizeExpired } = require('../services/attempts');
 const { getLeaderboard } = require('../services/stats');
-const { toId, cleanText, escapeLike, renderError, setFlash } = require('../utils');
+const { certificateCode, parseCode, verifySignature } = require('../services/certificates');
+const { audit } = require('../services/audit');
+const { toId, cleanText, escapeLike, renderError, setFlash, quizStatus, isPassed } = require('../utils');
 
 const router = express.Router();
 
@@ -13,7 +17,7 @@ const router = express.Router();
 async function findVisibleQuiz(id, user) {
   if (!id) return null;
   const [[quiz]] = await pool.query(
-    `SELECT q.*, c.name AS category_name,
+    `SELECT q.*, c.name AS category_name, c.icon AS category_icon,
             (SELECT COUNT(*) FROM questions WHERE quiz_id = q.id) AS question_count
        FROM quizzes q LEFT JOIN categories c ON c.id = q.category_id
       WHERE q.id = ?`,
@@ -21,6 +25,9 @@ async function findVisibleQuiz(id, user) {
   );
   if (!quiz) return null;
   if (!quiz.is_published && !(user && user.role === 'admin')) return null;
+  quiz.status = quizStatus(quiz);
+  quiz.has_code = Boolean(quiz.access_code_hash);
+  quiz.per_attempt = quiz.questions_per_attempt > 0 ? Math.min(quiz.questions_per_attempt, quiz.question_count) : quiz.question_count;
   return quiz;
 }
 
@@ -30,7 +37,7 @@ async function findOwnAttempt(id, user) {
   const [[attempt]] = await pool.query(
     `SELECT a.*, TIMESTAMPDIFF(SECOND, NOW(), a.deadline_at) AS remaining,
             TIMESTAMPDIFF(SECOND, a.started_at, a.submitted_at) AS duration,
-            q.title AS quiz_title, u.full_name, u.username, u.student_code
+            q.title AS quiz_title, q.pass_score, u.full_name, u.username, u.student_code
        FROM attempts a
        JOIN quizzes q ON q.id = a.quiz_id
        JOIN users u ON u.id = a.user_id
@@ -42,7 +49,8 @@ async function findOwnAttempt(id, user) {
   return attempt;
 }
 
-// Trang chủ: danh sách đề công khai, tìm kiếm theo từ khóa và lọc theo danh mục.
+// ===================== TRANG CHỦ =====================
+// Landing page: số liệu nổi bật, danh mục, danh sách đề (tìm kiếm / lọc), bảng vàng học viên.
 router.get('/', async (req, res) => {
   const q = cleanText(req.query.q, 100);
   const categoryId = toId(req.query.category);
@@ -59,20 +67,50 @@ router.get('/', async (req, res) => {
     params.push(categoryId);
   }
 
+  const userId = req.user ? req.user.id : 0;
   const [quizzes] = await pool.query(
-    `SELECT q.id, q.title, q.description, q.time_limit, q.max_attempts, c.name AS category_name,
+    `SELECT q.id, q.title, q.description, q.time_limit, q.max_attempts, q.questions_per_attempt, q.pass_score,
+            q.opens_at, q.closes_at, (q.access_code_hash IS NOT NULL) AS has_code,
+            c.name AS category_name, c.icon AS category_icon,
             (SELECT COUNT(*) FROM questions WHERE quiz_id = q.id) AS question_count,
-            (SELECT COUNT(*) FROM attempts WHERE quiz_id = q.id AND status = 'submitted') AS attempt_count
+            (SELECT COUNT(*) FROM attempts WHERE quiz_id = q.id AND status = 'submitted') AS attempt_count,
+            (SELECT ROUND(MAX(score / total) * 10, 2) FROM attempts
+              WHERE quiz_id = q.id AND user_id = ? AND status = 'submitted' AND total > 0) AS my_best
        FROM quizzes q LEFT JOIN categories c ON c.id = q.category_id
       WHERE ${where.join(' AND ')}
       ORDER BY q.created_at DESC, q.id DESC`,
-    params
+    [userId, ...params]
   );
-  const [categories] = await pool.query('SELECT id, name FROM categories ORDER BY name');
-  res.render('index', { title: 'Danh sách đề thi', quizzes, categories, q, categoryId });
+  quizzes.forEach((quiz) => {
+    quiz.status = quizStatus(quiz);
+    quiz.per_attempt = quiz.questions_per_attempt > 0 ? Math.min(quiz.questions_per_attempt, quiz.question_count) : quiz.question_count;
+  });
+
+  const [categories] = await pool.query(
+    `SELECT c.id, c.name, c.icon, COUNT(q.id) AS quiz_count
+       FROM categories c LEFT JOIN quizzes q ON q.category_id = c.id AND q.is_published = 1
+      GROUP BY c.id ORDER BY c.name`
+  );
+  const [[stats]] = await pool.query(
+    `SELECT (SELECT COUNT(*) FROM quizzes WHERE is_published = 1) AS quizzes,
+            (SELECT COUNT(*) FROM questions) AS questions,
+            (SELECT COUNT(*) FROM users WHERE role = 'student') AS students,
+            (SELECT COUNT(*) FROM attempts WHERE status = 'submitted') AS attempts`
+  );
+  // Bảng vàng: học viên có điểm trung bình cao nhất (ít nhất 2 bài đã nộp)
+  const [topStudents] = await pool.query(
+    `SELECT u.full_name, COUNT(*) AS attempts, ROUND(AVG(a.score / a.total) * 10, 2) AS avg_score
+       FROM attempts a JOIN users u ON u.id = a.user_id
+      WHERE a.status = 'submitted' AND a.total > 0 AND u.role = 'student'
+      GROUP BY u.id HAVING attempts >= 2
+      ORDER BY avg_score DESC, attempts DESC LIMIT 5`
+  );
+
+  res.render('index', { title: 'Trang chủ', quizzes, categories, stats, topStudents, q, categoryId });
 });
 
-// Trang giới thiệu đề: thông tin, số lượt đã làm, top 5 bảng xếp hạng, nút bắt đầu.
+// ===================== ĐỀ THI =====================
+// Trang giới thiệu đề: thông tin, lịch mở/đóng, mã phòng thi, lượt đã làm, top 5.
 router.get('/quiz/:id', async (req, res) => {
   const quiz = await findVisibleQuiz(toId(req.params.id), req.user);
   if (!quiz) return renderError(res, 404, 'Không tìm thấy', 'Đề thi không tồn tại.');
@@ -86,6 +124,9 @@ router.get('/quiz/:id', async (req, res) => {
          FROM attempts WHERE user_id = ? AND quiz_id = ? ORDER BY id DESC`,
       [req.user.id, quiz.id]
     );
+    myAttempts.forEach((a) => {
+      a.passed = a.status === 'submitted' && isPassed(a, quiz.pass_score);
+    });
   }
   const inProgress = myAttempts.find((a) => a.status === 'in_progress');
   const remainingAttempts = quiz.max_attempts > 0 ? Math.max(0, quiz.max_attempts - myAttempts.length) : null;
@@ -98,6 +139,31 @@ router.post('/quiz/:id/start', requireLogin, async (req, res) => {
   const quiz = await findVisibleQuiz(toId(req.params.id), req.user);
   if (!quiz) return renderError(res, 404, 'Không tìm thấy', 'Đề thi không tồn tại.');
 
+  const [[current]] = await pool.query(
+    "SELECT id FROM attempts WHERE user_id = ? AND quiz_id = ? AND status = 'in_progress' AND deadline_at > NOW() LIMIT 1",
+    [req.user.id, quiz.id]
+  );
+  // Bài đang làm dở thì cho làm tiếp; còn lượt mới thì kiểm tra lịch thi và mã phòng thi.
+  if (!current) {
+    if (quiz.status === 'upcoming') {
+      setFlash(req, 'error', 'Đề thi chưa đến giờ mở.');
+      return res.redirect(303, `/quiz/${quiz.id}`);
+    }
+    if (quiz.status === 'closed') {
+      setFlash(req, 'error', 'Đề thi đã đóng.');
+      return res.redirect(303, `/quiz/${quiz.id}`);
+    }
+    if (quiz.has_code) {
+      const code = cleanText(req.body.access_code, 50);
+      if (!code || !(await bcrypt.compare(code, quiz.access_code_hash))) {
+        logger.warn('access_code_failed', { quiz_id: quiz.id, user: req.user.username, ip: req.ip });
+        await audit(req, 'access_code_failed', `Nhập sai mã phòng thi đề #${quiz.id}`);
+        setFlash(req, 'error', 'Mã vào phòng thi không đúng.');
+        return res.redirect(303, `/quiz/${quiz.id}`);
+      }
+    }
+  }
+
   const result = await startAttempt(req.user, quiz);
   if (result.error) {
     setFlash(req, 'error', result.error);
@@ -107,7 +173,7 @@ router.post('/quiz/:id/start', requireLogin, async (req, res) => {
   res.redirect(303, `/attempt/${result.attemptId}`);
 });
 
-// Trang làm bài: câu hỏi theo thứ tự đã xáo, đồng hồ lấy số giây còn lại từ máy chủ.
+// ===================== LÀM BÀI =====================
 router.get('/attempt/:id', requireLogin, async (req, res) => {
   const attempt = await findOwnAttempt(toId(req.params.id), req.user);
   if (!attempt || attempt.user_id !== req.user.id) {
@@ -123,18 +189,13 @@ router.get('/attempt/:id', requireLogin, async (req, res) => {
 
   const order = attempt.question_order;
   const [rows] = await pool.query(
-    'SELECT id, content, option_a, option_b, option_c, option_d FROM questions WHERE id IN (?)',
+    'SELECT id, content, option_a, option_b, option_c, option_d, difficulty FROM questions WHERE id IN (?)',
     [order]
   );
   const byId = new Map(rows.map((q) => [q.id, q]));
   const questions = order.map((id) => byId.get(id)).filter(Boolean);
 
-  res.render('attempt', {
-    title: attempt.quiz_title,
-    attempt,
-    questions,
-    remaining: Math.max(0, attempt.remaining),
-  });
+  res.render('attempt', { title: attempt.quiz_title, attempt, questions, remaining: Math.max(0, attempt.remaining) });
 });
 
 router.post('/attempt/:id/submit', requireLogin, async (req, res) => {
@@ -157,7 +218,8 @@ router.post('/attempt/:id/submit', requireLogin, async (req, res) => {
   res.redirect(303, `/result/${attempt.id}`);
 });
 
-// Kết quả: điểm và đáp án chi tiết. Chỉ chủ bài làm hoặc quản trị viên được xem.
+// ===================== KẾT QUẢ =====================
+// Điểm, đáp án chi tiết kèm giải thích. Chỉ chủ bài làm hoặc quản trị viên được xem.
 router.get('/result/:id', requireLogin, async (req, res) => {
   const attempt = await findOwnAttempt(toId(req.params.id), req.user);
   if (!attempt) return renderError(res, 404, 'Không tìm thấy', 'Bài làm không tồn tại.');
@@ -165,31 +227,54 @@ router.get('/result/:id', requireLogin, async (req, res) => {
 
   const [details] = await pool.query(
     `SELECT qs.content, qs.option_a, qs.option_b, qs.option_c, qs.option_d, qs.correct_option,
-            aa.selected_option, aa.is_correct
+            qs.explanation, qs.difficulty, aa.selected_option, aa.is_correct
        FROM attempt_answers aa JOIN questions qs ON qs.id = aa.question_id
       WHERE aa.attempt_id = ?
       ORDER BY aa.id`,
     [attempt.id]
   );
-  res.render('result', { title: 'Kết quả bài làm', attempt, details });
+  const passed = isPassed(attempt, attempt.pass_score);
+  res.render('result', { title: 'Kết quả bài làm', attempt, details, passed });
 });
 
-// Lịch sử làm bài của học viên đang đăng nhập.
-router.get('/me/history', requireLogin, async (req, res) => {
-  await finalizeExpired(req.user.id);
-  const [attempts] = await pool.query(
-    `SELECT a.id, a.quiz_id, a.status, a.score, a.total, a.is_late, a.started_at, a.submitted_at,
-            TIMESTAMPDIFF(SECOND, a.started_at, a.submitted_at) AS duration, q.title AS quiz_title
-       FROM attempts a JOIN quizzes q ON q.id = a.quiz_id
-      WHERE a.user_id = ?
-      ORDER BY a.id DESC`,
-    [req.user.id]
-  );
-  const done = attempts.filter((a) => a.status === 'submitted' && a.total > 0);
-  const avg = done.length ? done.reduce((s, a) => s + (a.score / a.total) * 10, 0) / done.length : null;
-  res.render('history', { title: 'Lịch sử làm bài', attempts, doneCount: done.length, avg });
+// ===================== GIẤY CHỨNG NHẬN =====================
+router.get('/certificate/:id', requireLogin, async (req, res) => {
+  const attempt = await findOwnAttempt(toId(req.params.id), req.user);
+  if (!attempt || attempt.status !== 'submitted') return renderError(res, 404, 'Không tìm thấy', 'Bài làm không tồn tại.');
+  if (!isPassed(attempt, attempt.pass_score)) {
+    return renderError(res, 403, 'Chưa đạt yêu cầu', `Cần đạt tối thiểu ${Number(attempt.pass_score)} điểm để nhận giấy chứng nhận.`);
+  }
+  const code = certificateCode(attempt.id, attempt.user_id);
+  logger.info('certificate_viewed', { attempt_id: attempt.id, user: req.user.username });
+  res.render('certificate', { title: 'Giấy chứng nhận', attempt, code });
 });
 
+// Trang công khai: ai có mã đều kiểm tra được giấy chứng nhận là thật hay giả.
+router.get('/verify', async (req, res) => {
+  const raw = cleanText(req.query.code, 40);
+  let result = null;
+  if (raw) {
+    const parsed = parseCode(raw);
+    let attempt = null;
+    if (parsed) {
+      [[attempt]] = await pool.query(
+        `SELECT a.id, a.user_id, a.score, a.total, a.is_late, a.submitted_at, a.status,
+                q.title AS quiz_title, q.pass_score, u.full_name, u.student_code
+           FROM attempts a JOIN quizzes q ON q.id = a.quiz_id JOIN users u ON u.id = a.user_id
+          WHERE a.id = ?`,
+        [parsed.attemptId]
+      );
+    }
+    const valid = Boolean(
+      attempt && attempt.status === 'submitted' && verifySignature(parsed, attempt.user_id) && isPassed(attempt, attempt.pass_score)
+    );
+    logger.info('certificate_verified', { code: raw, valid });
+    result = { code: raw, valid, attempt: valid ? attempt : null };
+  }
+  res.render('verify', { title: 'Xác thực giấy chứng nhận', result });
+});
+
+// ===================== BẢNG XẾP HẠNG =====================
 router.get('/quiz/:id/leaderboard', requireLogin, async (req, res) => {
   const quiz = await findVisibleQuiz(toId(req.params.id), req.user);
   if (!quiz) return renderError(res, 404, 'Không tìm thấy', 'Đề thi không tồn tại.');

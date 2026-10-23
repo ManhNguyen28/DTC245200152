@@ -25,7 +25,10 @@
           <td><a href="/result/<%= a.id %>"><%= a.full_name %></a> <span class="muted small">@<%= a.username %></span></td>
           <td><%= a.student_code || '—' %></td>
           <td><%= a.score %>/<%= a.total %></td>
-          <td><strong><%= score10(a.score, a.total) %></strong> <% if (a.is_late) { %><span class="pill pill-bad">Quá giờ</span><% } %></td>
+          <td><strong><%= score10(a.score, a.total) %></strong>
+            <% if (a.is_late) { %><span class="pill pill-bad">Quá giờ</span>
+            <% } else if (a.total > 0 && a.score / a.total * 10 >= Number(quiz.pass_score)) { %><span class="pill pill-ok">Đạt</span>
+            <% } else { %><span class="pill pill-warn">Chưa đạt</span><% } %></td>
           <td><%= formatDuration(a.duration) %></td>
           <td><%= formatDate(a.submitted_at) %></td>
         </tr>

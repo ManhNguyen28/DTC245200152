@@ -1,0 +1,24 @@
+<%- include('partials/header') %>
+<div class="page-head no-print">
+  <h1><%- icon('award') %> Giấy chứng nhận</h1>
+  <div class="actions">
+    <button class="btn" id="print-btn" type="button"><%- icon('printer') %> In / Lưu PDF</button>
+    <a class="btn btn-ghost" href="/result/<%= attempt.id %>">Về kết quả</a>
+  </div>
+</div>
+<div class="cert-wrap">
+  <div class="certificate">
+    <div class="org">Trường ĐH Công nghệ Thông tin và Truyền thông · Quiz Online</div>
+    <div class="title">GIẤY CHỨNG NHẬN</div>
+    <div>Chứng nhận học viên</div>
+    <div class="name"><%= attempt.full_name %></div>
+    <div><% if (attempt.student_code) { %>Mã sinh viên: <strong><%= attempt.student_code %></strong> · <% } %>đã hoàn thành bài thi</div>
+    <div><strong><%= attempt.quiz_title %></strong></div>
+    <div>với kết quả <strong><%= score10(attempt.score, attempt.total) %>/10</strong> (đúng <%= attempt.score %>/<%= attempt.total %> câu)</div>
+    <div class="muted">Ngày <%= formatDate(attempt.submitted_at) %></div>
+    <div class="code">Mã xác thực: <strong><%= code %></strong><br>Kiểm tra tại: /verify</div>
+    <div class="seal">ĐẠT</div>
+  </div>
+</div>
+<p class="muted small center no-print">Người nhận có thể kiểm tra giấy chứng nhận là thật bằng cách nhập mã xác thực tại trang <a href="/verify?code=<%= encodeURIComponent(code) %>">Xác thực giấy chứng nhận</a>.</p>
+<%- include('partials/footer') %>

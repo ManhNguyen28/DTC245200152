@@ -1,0 +1,28 @@
+<%- include('partials/header') %>
+<section class="card center">
+  <div class="category">Kết quả luyện tập (không tính điểm)</div>
+  <p class="score"><%= score %> / <%= results.length %></p>
+  <p class="muted">Các câu trả lời đúng lần này sẽ không còn trong danh sách ôn tập sau khi bạn làm đúng ở một bài thi.</p>
+  <div class="actions centered">
+    <a class="btn" href="/me/review"><%- icon('refresh') %> Luyện lại</a>
+    <a class="btn btn-ghost" href="/">Về trang đề thi</a>
+  </div>
+</section>
+
+<% results.forEach((r, i) => { %>
+  <section class="card question <%= r.correct ? 'correct' : 'wrong' %>">
+    <div class="q-head">
+      <div class="q-title"><span class="q-num">Câu <%= i + 1 %>.</span> <%= r.content %></div>
+      <span class="pill diff-<%= r.difficulty %>"><%= DIFFICULTY[r.difficulty] %></span>
+    </div>
+    <% ['A', 'B', 'C', 'D'].forEach((opt) => { %>
+      <div class="answer <%= opt === r.correct_option ? 'is-correct' : '' %> <%= opt === r.practice ? 'is-selected' : '' %>">
+        <span class="opt-key"><%= opt %></span> <%= r['option_' + opt.toLowerCase()] %>
+        <% if (opt === r.correct_option) { %><span class="tag ok">Đáp án đúng</span><% } %>
+        <% if (opt === r.practice && !r.correct) { %><span class="tag bad">Bạn chọn</span><% } %>
+      </div>
+    <% }) %>
+    <% if (r.explanation) { %><div class="explain"><strong>Giải thích:</strong> <%= r.explanation %></div><% } %>
+  </section>
+<% }) %>
+<%- include('partials/footer') %>

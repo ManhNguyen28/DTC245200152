@@ -1,37 +1,95 @@
 <%- include('partials/header') %>
-<div class="page-head">
-  <h1>Danh sách đề thi</h1>
+<% const STATUS = { open: ['pill-ok', 'Đang mở'], upcoming: ['pill-info', 'Sắp mở'], closed: ['pill-muted', 'Đã đóng'] }; %>
+
+<section class="hero">
+  <h1>Luyện thi trắc nghiệm trực tuyến – nhanh, công bằng, có kết quả ngay</h1>
+  <p>Đồng hồ do máy chủ tính, câu hỏi xáo trộn mỗi lượt, chấm điểm tự động kèm giải thích đáp án. Theo dõi tiến bộ, ôn lại câu sai và nhận giấy chứng nhận khi đạt.</p>
+  <div class="hero-actions">
+    <a class="btn" href="#de-thi"><%- icon('play') %> Bắt đầu làm bài</a>
+    <% if (!locals.currentUser) { %>
+      <a class="btn btn-ghost" href="/register"><%- icon('user') %> Tạo tài khoản miễn phí</a>
+    <% } else { %>
+      <a class="btn btn-ghost" href="/me/history"><%- icon('activity') %> Xem tiến bộ của tôi</a>
+    <% } %>
+  </div>
+</section>
+
+<div class="stat-strip">
+  <div class="stat"><div class="stat-icon"><%- icon('layers', 'lg') %></div><div><div class="stat-value"><%= stats.quizzes %></div><div class="stat-label">Đề thi</div></div></div>
+  <div class="stat"><div class="stat-icon"><%- icon('list', 'lg') %></div><div><div class="stat-value"><%= stats.questions %></div><div class="stat-label">Câu hỏi</div></div></div>
+  <div class="stat"><div class="stat-icon"><%- icon('users', 'lg') %></div><div><div class="stat-value"><%= stats.students %></div><div class="stat-label">Học viên</div></div></div>
+  <div class="stat"><div class="stat-icon"><%- icon('check', 'lg') %></div><div><div class="stat-value"><%= stats.attempts %></div><div class="stat-label">Lượt đã nộp</div></div></div>
 </div>
 
-<form class="card filter" method="get" action="/">
-  <input name="q" value="<%= q %>" placeholder="Tìm theo tên hoặc mô tả đề thi..." maxlength="100">
-  <select name="category">
-    <option value="">Tất cả danh mục</option>
-    <% categories.forEach((c) => { %>
-      <option value="<%= c.id %>" <%= c.id === categoryId ? 'selected' : '' %>><%= c.name %></option>
-    <% }) %>
-  </select>
-  <button class="btn" type="submit">Tìm</button>
-  <% if (q || categoryId) { %><a href="/">Xóa lọc</a><% } %>
-</form>
+<div class="two-col" id="de-thi">
+  <div>
+    <div class="page-head"><h2>Danh sách đề thi</h2></div>
+    <form class="card filter" method="get" action="/">
+      <input name="q" value="<%= q %>" placeholder="Tìm theo tên hoặc mô tả đề thi..." maxlength="100">
+      <% if (categoryId) { %><input type="hidden" name="category" value="<%= categoryId %>"><% } %>
+      <button class="btn" type="submit"><%- icon('search') %> Tìm</button>
+      <% if (q || categoryId) { %><a href="/">Xóa lọc</a><% } %>
+    </form>
+    <div class="chips">
+      <a class="chip <%= !categoryId ? 'active' : '' %>" href="/<%= q ? '?q=' + encodeURIComponent(q) : '' %>">Tất cả</a>
+      <% categories.forEach((c) => { %>
+        <a class="chip <%= c.id === categoryId ? 'active' : '' %>" href="/?category=<%= c.id %><%= q ? '&q=' + encodeURIComponent(q) : '' %>">
+          <%- icon(c.icon) %> <%= c.name %> <span class="count">(<%= c.quiz_count %>)</span>
+        </a>
+      <% }) %>
+    </div>
 
-<% if (quizzes.length === 0) { %>
-  <p class="muted">Không tìm thấy đề thi nào.</p>
-<% } %>
-<div class="grid">
-  <% quizzes.forEach((quiz) => { %>
-    <article class="card quiz-card">
-      <% if (quiz.category_name) { %><span class="category"><%= quiz.category_name %></span><% } %>
-      <h2><%= quiz.title %></h2>
-      <p class="muted"><%= quiz.description %></p>
-      <p>
-        <span class="badge"><%= quiz.question_count %> câu</span>
-        <span class="badge"><%= quiz.time_limit %> phút</span>
-        <span class="badge"><%= quiz.max_attempts > 0 ? `Tối đa ${quiz.max_attempts} lượt` : 'Không giới hạn lượt' %></span>
-      </p>
-      <p class="muted small"><%= quiz.attempt_count %> lượt đã làm</p>
-      <a class="btn" href="/quiz/<%= quiz.id %>">Xem đề</a>
-    </article>
-  <% }) %>
+    <% if (quizzes.length === 0) { %><p class="muted">Không tìm thấy đề thi nào.</p><% } %>
+    <div class="grid">
+      <% quizzes.forEach((quiz) => { %>
+        <article class="card quiz-card">
+          <div class="head">
+            <div class="cat-icon <%= quiz.category_icon || 'book' %>"><%- icon(quiz.category_icon || 'book', 'lg') %></div>
+            <div>
+              <div class="category"><%= quiz.category_name || 'Chưa phân loại' %></div>
+              <h3><%= quiz.title %></h3>
+            </div>
+          </div>
+          <p class="desc"><%= quiz.description %></p>
+          <div class="meta">
+            <span class="pill <%= STATUS[quiz.status][0] %>"><%= STATUS[quiz.status][1] %></span>
+            <% if (quiz.has_code) { %><span class="pill pill-warn"><%- icon('lock') %> Cần mã</span><% } %>
+            <span class="badge"><%- icon('list') %> <%= quiz.per_attempt %> câu<%= quiz.questions_per_attempt > 0 ? ` / ngân hàng ${quiz.question_count}` : '' %></span>
+            <span class="badge"><%- icon('clock') %> <%= quiz.time_limit %> phút</span>
+            <span class="badge"><%- icon('target') %> Đạt ≥ <%= Number(quiz.pass_score) %></span>
+          </div>
+          <div class="foot">
+            <span class="muted small"><%- icon('users') %> <%= quiz.attempt_count %> lượt
+              <% if (quiz.my_best !== null) { %> · <span class="my-best">Bạn: <%= quiz.my_best %></span><% } %></span>
+            <a class="btn sm" href="/quiz/<%= quiz.id %>">Xem đề</a>
+          </div>
+        </article>
+      <% }) %>
+    </div>
+  </div>
+
+  <aside>
+    <section class="card">
+      <h3><%- icon('award') %> Bảng vàng</h3>
+      <p class="muted small">Điểm trung bình cao nhất (ít nhất 2 bài)</p>
+      <% if (topStudents.length === 0) { %>
+        <p class="muted">Chưa có dữ liệu.</p>
+      <% } else { %>
+        <ol class="ranking">
+          <% topStudents.forEach((s, i) => { %>
+            <li><span class="rank rank-<%= i + 1 %>"><%= i + 1 %></span><span class="name"><%= s.full_name %><br><span class="muted small"><%= s.attempts %> bài</span></span><strong><%= s.avg_score %></strong></li>
+          <% }) %>
+        </ol>
+      <% } %>
+    </section>
+    <section class="card">
+      <h3><%- icon('info') %> Cách tính điểm</h3>
+      <ul class="small muted">
+        <li>Điểm hệ 10 = số câu đúng / tổng số câu × 10.</li>
+        <li>Hết giờ hệ thống tự nộp bài; nộp quá giờ không được tính điểm.</li>
+        <li>Đạt điểm yêu cầu của đề sẽ nhận giấy chứng nhận có mã xác thực.</li>
+      </ul>
+    </section>
+  </aside>
 </div>
 <%- include('partials/footer') %>

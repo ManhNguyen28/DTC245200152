@@ -8,18 +8,26 @@ Website tạo đề thi trắc nghiệm, làm bài và chấm điểm tự độ
 ## Chức năng
 
 **Học viên**
-- Đăng ký / đăng nhập tài khoản (mật khẩu băm bcrypt)
-- Tìm kiếm đề theo từ khóa, lọc theo danh mục môn học
-- Làm bài: câu hỏi xáo trộn mỗi lượt, đồng hồ đếm ngược do **máy chủ** tính, hết giờ tự nộp, bỏ dở có thể làm tiếp
-- Giới hạn số lượt làm mỗi đề; bài nộp quá hạn không được tính điểm
-- Xem điểm và đáp án chi tiết, lịch sử làm bài, bảng xếp hạng từng đề
+- Đăng ký / đăng nhập; trang **hồ sơ** và **đổi mật khẩu** (mật khẩu băm bcrypt)
+- Trang chủ dạng landing: số liệu nổi bật, danh mục có icon, tìm kiếm / lọc đề, **bảng vàng** học viên
+- Làm bài: câu hỏi xáo trộn, đồng hồ do **máy chủ** tính, hết giờ tự nộp, **thanh tiến độ**, **bảng điều hướng câu hỏi**,
+  **đánh dấu câu chưa chắc**, đáp án **tự lưu tạm** trên trình duyệt (tải lại trang không mất bài)
+- Kết quả có **giải thích đáp án** và độ khó từng câu; **biểu đồ tiến bộ** điểm theo thời gian
+- **Ôn tập câu làm sai** và luyện tập lại (không tính điểm)
+- **Giấy chứng nhận** khi đạt điểm yêu cầu (in / lưu PDF) với **mã xác thực HMAC** – ai cũng kiểm tra được tại `/verify`
+- Giao diện **sáng / tối**, hiển thị tốt trên điện thoại
+
+**Đề thi nâng cao**
+- **Ngân hàng câu hỏi**: mỗi lượt rút ngẫu nhiên N câu; **điểm đạt** tối thiểu; giới hạn số lượt làm
+- **Lịch mở / đóng đề**; **mã vào phòng thi** (lưu dạng băm bcrypt); bài nộp quá hạn không tính điểm
 
 **Quản trị viên** (`/admin`)
-- Tổng quan: số học viên, đề, câu hỏi, lượt nộp, biểu đồ lượt nộp 7 ngày
-- Quản lý đề thi (tạo, sửa, ẩn/công khai, xóa), câu hỏi (thêm, sửa, xóa), danh mục môn học
-- Nhập câu hỏi hàng loạt từ file CSV (mẫu: `db/sample-questions.csv`), xuất bảng điểm ra CSV (mở bằng Excel)
+- Tổng quan: số liệu, biểu đồ lượt nộp 7 ngày, hoạt động gần đây
+- Quản lý đề thi (tạo, sửa, ẩn/công khai, **nhân bản**, xóa), câu hỏi (kèm giải thích, độ khó), danh mục có icon
+- Nhập câu hỏi từ CSV (mẫu: `db/sample-questions.csv`), **xuất câu hỏi** và bảng điểm ra CSV (mở bằng Excel)
 - Thống kê đề: điểm trung bình/cao nhất/thấp nhất, tỉ lệ đạt, phân bố điểm, tỉ lệ đúng từng câu, top 10
-- Danh sách người dùng
+- **Quản lý người dùng**: khóa / mở khóa, đổi vai trò, đặt lại mật khẩu (mật khẩu tạm hiện một lần)
+- **Nhật ký hoạt động (audit log)**: ai làm gì, lúc nào, từ IP nào – lọc theo hành động / người dùng
 
 **Bảo mật trong ứng dụng**: bcrypt, khóa đăng nhập 15 phút sau 5 lần sai, CSRF token cho mọi form,
 cookie `HttpOnly`/`SameSite`, đổi session id khi đăng nhập, kiểm tra quyền sở hữu bài làm,
@@ -169,7 +177,7 @@ DTC245200152/
 │   └── grafana/                # provisioning (Prometheus + Loki) + dashboards/*.json (4 dashboard)
 ├── scripts/ufw-setup.sh        # Tường lửa máy chủ (chặn mặc định, mở 22/80/443)
 ├── tests/
-│   ├── e2e-test.sh             # Kiểm thử tự động 45 kịch bản (chức năng + bảo mật)
+│   ├── e2e-test.sh             # kiểm thử tự động 69 kịch bản (chức năng + bảo mật)
 │   └── demo-traffic.sh         # Mô phỏng buổi thi: 6 học viên demo, 18 bài nộp, đăng nhập sai
 ├── docker-compose.yml
 ├── .env.example                # Mẫu biến môi trường
@@ -230,7 +238,7 @@ Tài khoản admin được ứng dụng tạo tự động ở lần khởi đ�
 
 ```bash
 docker compose down -v && docker compose up -d   # CSDL sạch
-bash tests/e2e-test.sh                             # 45 kịch bản, in ĐẠT/LỖI cho từng kịch bản
+bash tests/e2e-test.sh                             # 69 kịch bản, in ĐẠT/LỖI cho từng kịch bản
 
 # Tạo dữ liệu demo (6 học viên hv01..hv06, mật khẩu HocVien2026) cho bảng xếp hạng và dashboard
 bash tests/demo-traffic.sh

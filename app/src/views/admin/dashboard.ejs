@@ -3,16 +3,16 @@
 <h1>Tổng quan hệ thống</h1>
 
 <div class="grid kpis">
-  <div class="card center"><p class="muted">Học viên</p><p class="score"><%= totals.students %></p></div>
-  <div class="card center"><p class="muted">Đề thi</p><p class="score"><%= totals.quizzes %></p></div>
-  <div class="card center"><p class="muted">Câu hỏi</p><p class="score"><%= totals.questions %></p></div>
-  <div class="card center"><p class="muted">Lượt nộp bài</p><p class="score"><%= totals.attempts %></p></div>
-  <div class="card center"><p class="muted">Điểm trung bình</p><p class="score"><%= totals.avg_score ?? '—' %></p></div>
+  <div class="stat"><div class="stat-icon"><%- icon('users', 'lg') %></div><div><div class="stat-value"><%= totals.students %></div><div class="stat-label">Học viên</div></div></div>
+  <div class="stat"><div class="stat-icon"><%- icon('layers', 'lg') %></div><div><div class="stat-value"><%= totals.quizzes %></div><div class="stat-label">Đề thi</div></div></div>
+  <div class="stat"><div class="stat-icon"><%- icon('list', 'lg') %></div><div><div class="stat-value"><%= totals.questions %></div><div class="stat-label">Câu hỏi</div></div></div>
+  <div class="stat"><div class="stat-icon"><%- icon('check', 'lg') %></div><div><div class="stat-value"><%= totals.attempts %></div><div class="stat-label">Lượt nộp bài</div></div></div>
+  <div class="stat"><div class="stat-icon"><%- icon('target', 'lg') %></div><div><div class="stat-value"><%= totals.avg_score ?? '—' %></div><div class="stat-label">Điểm trung bình</div></div></div>
 </div>
 
 <div class="two-col">
   <section class="card">
-    <h2>Lượt nộp bài 7 ngày gần nhất</h2>
+    <h3><%- icon('chart') %> Lượt nộp bài 7 ngày gần nhất</h3>
     <% const maxDay = Math.max(1, ...days.map((d) => d.n)); %>
     <div class="vbars">
       <% days.forEach((d) => { %>
@@ -26,7 +26,38 @@
   </section>
 
   <section class="card">
-    <h2>Đề được làm nhiều nhất</h2>
+    <h3><%- icon('shield') %> Hoạt động gần đây</h3>
+    <% events.forEach((e) => { %>
+      <div class="event">
+        <div><strong><%= e.username || 'khách' %></strong> · <code><%= e.action %></code><br><span class="muted small"><%= e.detail %></span></div>
+        <div class="when"><%= formatDate(e.created_at) %></div>
+      </div>
+    <% }) %>
+    <% if (events.length === 0) { %><p class="muted">Chưa có hoạt động.</p><% } %>
+    <p><a href="/admin/audit">Xem toàn bộ nhật ký →</a></p>
+  </section>
+</div>
+
+<div class="two-col">
+  <section class="card table-wrap">
+    <h3><%- icon('check') %> Bài nộp gần đây</h3>
+    <table>
+      <thead><tr><th>Học viên</th><th>Đề thi</th><th>Điểm</th><th>Nộp lúc</th></tr></thead>
+      <tbody>
+        <% recent.forEach((a) => { %>
+          <tr>
+            <td><a href="/result/<%= a.id %>"><%= a.full_name %></a><br><span class="muted small"><%= a.student_code || '' %></span></td>
+            <td><%= a.quiz_title %></td>
+            <td><%= a.score %>/<%= a.total %> <% if (a.is_late) { %><span class="pill pill-bad">Quá giờ</span><% } %></td>
+            <td class="small"><%= formatDate(a.submitted_at) %></td>
+          </tr>
+        <% }) %>
+        <% if (recent.length === 0) { %><tr><td colspan="4" class="muted">Chưa có bài nộp nào.</td></tr><% } %>
+      </tbody>
+    </table>
+  </section>
+  <section class="card table-wrap">
+    <h3><%- icon('award') %> Đề được làm nhiều nhất</h3>
     <table>
       <thead><tr><th>Đề thi</th><th>Lượt</th><th>Điểm TB</th></tr></thead>
       <tbody>
@@ -38,23 +69,4 @@
     </table>
   </section>
 </div>
-
-<h2>Bài nộp gần đây</h2>
-<section class="card">
-  <table>
-    <thead><tr><th>Học viên</th><th>Mã SV</th><th>Đề thi</th><th>Điểm</th><th>Nộp lúc</th></tr></thead>
-    <tbody>
-      <% recent.forEach((a) => { %>
-        <tr>
-          <td><a href="/result/<%= a.id %>"><%= a.full_name %></a></td>
-          <td><%= a.student_code || '—' %></td>
-          <td><%= a.quiz_title %></td>
-          <td><%= a.score %>/<%= a.total %> <% if (a.is_late) { %><span class="pill pill-bad">Quá giờ</span><% } %></td>
-          <td><%= formatDate(a.submitted_at) %></td>
-        </tr>
-      <% }) %>
-      <% if (recent.length === 0) { %><tr><td colspan="5" class="muted">Chưa có bài nộp nào.</td></tr><% } %>
-    </tbody>
-  </table>
-</section>
 <%- include('../partials/footer') %>

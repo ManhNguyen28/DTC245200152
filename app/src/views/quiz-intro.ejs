@@ -1,55 +1,76 @@
 <%- include('partials/header') %>
+<% const STATUS = { open: ['pill-ok', 'Đang mở'], upcoming: ['pill-info', 'Sắp mở'], closed: ['pill-muted', 'Đã đóng'] }; %>
 <div class="two-col">
   <section class="card">
-    <% if (quiz.category_name) { %><span class="category"><%= quiz.category_name %></span><% } %>
+    <div class="category"><%= quiz.category_name || 'Chưa phân loại' %></div>
     <h1><%= quiz.title %></h1>
-    <% if (!quiz.is_published) { %><p class="pill pill-warn">Đề đang ẩn – chỉ quản trị viên xem được</p><% } %>
+    <p>
+      <span class="pill <%= STATUS[quiz.status][0] %>"><%= STATUS[quiz.status][1] %></span>
+      <% if (!quiz.is_published) { %><span class="pill pill-warn">Đề đang ẩn – chỉ quản trị viên xem được</span><% } %>
+      <% if (quiz.has_code) { %><span class="pill pill-warn"><%- icon('lock') %> Cần mã vào phòng thi</span><% } %>
+    </p>
     <p class="muted"><%= quiz.description %></p>
+
     <ul class="facts">
-      <li>Số câu hỏi: <strong><%= quiz.question_count %></strong></li>
-      <li>Thời gian: <strong><%= quiz.time_limit %> phút</strong> (hết giờ tự động nộp bài)</li>
-      <li>Số lượt làm: <strong><%= quiz.max_attempts > 0 ? `tối đa ${quiz.max_attempts} lượt` : 'không giới hạn' %></strong></li>
-      <li>Thứ tự câu hỏi: <strong><%= quiz.shuffle_questions ? 'xáo trộn mỗi lượt' : 'cố định' %></strong></li>
+      <li><%- icon('list') %> <span><strong><%= quiz.per_attempt %></strong> câu mỗi lượt<%= quiz.questions_per_attempt > 0 ? ` (rút ngẫu nhiên từ ${quiz.question_count} câu)` : '' %></span></li>
+      <li><%- icon('clock') %> <span><strong><%= quiz.time_limit %> phút</strong>, hết giờ tự nộp</span></li>
+      <li><%- icon('target') %> <span>Điểm đạt: <strong><%= Number(quiz.pass_score) %>/10</strong></span></li>
+      <li><%- icon('refresh') %> <span><%= quiz.max_attempts > 0 ? `Tối đa ${quiz.max_attempts} lượt` : 'Không giới hạn lượt' %></span></li>
+      <li><%- icon('layers') %> <span>Thứ tự câu: <%= quiz.shuffle_questions ? 'xáo trộn mỗi lượt' : 'cố định' %></span></li>
+      <li><%- icon('calendar') %> <span>
+        <% if (quiz.opens_at || quiz.closes_at) { %>
+          <%= quiz.opens_at ? 'Mở ' + formatDate(quiz.opens_at) : '' %><%= quiz.opens_at && quiz.closes_at ? ' · ' : '' %><%= quiz.closes_at ? 'Đóng ' + formatDate(quiz.closes_at) : '' %>
+        <% } else { %>Không giới hạn thời gian mở đề<% } %>
+      </span></li>
     </ul>
 
     <% if (!locals.currentUser) { %>
-      <a class="btn" href="/login?next=/quiz/<%= quiz.id %>">Đăng nhập để làm bài</a>
+      <a class="btn" href="/login?next=/quiz/<%= quiz.id %>"><%- icon('user') %> Đăng nhập để làm bài</a>
     <% } else if (quiz.question_count === 0) { %>
       <p class="muted">Đề thi chưa có câu hỏi.</p>
     <% } else if (inProgress) { %>
       <form method="post" action="/quiz/<%= quiz.id %>/start">
         <%- include('partials/csrf') %>
-        <button class="btn" type="submit">Tiếp tục bài đang làm</button>
+        <button class="btn" type="submit"><%- icon('play') %> Tiếp tục bài đang làm</button>
       </form>
+    <% } else if (quiz.status === 'upcoming') { %>
+      <p class="pill pill-info"><%- icon('calendar') %> Đề sẽ mở lúc <%= formatDate(quiz.opens_at) %></p>
+    <% } else if (quiz.status === 'closed') { %>
+      <p class="pill pill-muted">Đề thi đã đóng.</p>
     <% } else if (remainingAttempts === 0) { %>
       <p class="pill pill-bad">Bạn đã dùng hết lượt làm bài của đề này.</p>
     <% } else { %>
-      <form method="post" action="/quiz/<%= quiz.id %>/start">
+      <form method="post" action="/quiz/<%= quiz.id %>/start" class="start-box">
         <%- include('partials/csrf') %>
-        <button class="btn" type="submit">Bắt đầu làm bài</button>
+        <% if (quiz.has_code) { %>
+          <label>Mã vào phòng thi
+            <input name="access_code" required maxlength="50" autocomplete="off" placeholder="Nhập mã giảng viên cung cấp">
+          </label>
+        <% } %>
+        <button class="btn" type="submit"><%- icon('play') %> Bắt đầu làm bài</button>
         <% if (remainingAttempts !== null) { %><span class="muted">Còn <%= remainingAttempts %> lượt</span><% } %>
       </form>
     <% } %>
   </section>
 
   <aside class="card">
-    <h2>Top 5</h2>
+    <h3><%- icon('award') %> Top 5</h3>
     <% if (top.length === 0) { %>
       <p class="muted">Chưa có ai làm đề này.</p>
     <% } else { %>
       <ol class="ranking">
-        <% top.forEach((r) => { %>
-          <li><span><%= r.full_name %></span><strong><%= score10(r.score, r.total) %></strong></li>
+        <% top.forEach((r, i) => { %>
+          <li><span class="rank rank-<%= i + 1 %>"><%= i + 1 %></span><span class="name"><%= r.full_name %></span><strong><%= score10(r.score, r.total) %></strong></li>
         <% }) %>
       </ol>
     <% } %>
-    <% if (locals.currentUser) { %><a href="/quiz/<%= quiz.id %>/leaderboard">Xem bảng xếp hạng đầy đủ →</a><% } %>
+    <% if (locals.currentUser) { %><p><a href="/quiz/<%= quiz.id %>/leaderboard">Xem bảng xếp hạng đầy đủ →</a></p><% } %>
   </aside>
 </div>
 
 <% if (myAttempts.length) { %>
   <h2>Các lượt làm của bạn</h2>
-  <section class="card">
+  <section class="card table-wrap">
     <table>
       <thead><tr><th>#</th><th>Trạng thái</th><th>Điểm</th><th>Thời gian làm</th><th>Nộp lúc</th><th></th></tr></thead>
       <tbody>
@@ -59,12 +80,16 @@
             <td>
               <% if (a.status === 'in_progress') { %><span class="pill pill-info">Đang làm</span>
               <% } else if (a.is_late) { %><span class="pill pill-bad">Quá giờ</span>
-              <% } else { %><span class="pill pill-ok">Đã nộp</span><% } %>
+              <% } else if (a.passed) { %><span class="pill pill-ok"><%- icon('check') %> Đạt</span>
+              <% } else { %><span class="pill pill-warn">Chưa đạt</span><% } %>
             </td>
             <td><%= a.status === 'submitted' ? `${a.score}/${a.total} (${score10(a.score, a.total)})` : '—' %></td>
             <td><%= formatDuration(a.duration) %></td>
             <td><%= formatDate(a.submitted_at) %></td>
-            <td><a href="/<%= a.status === 'submitted' ? 'result' : 'attempt' %>/<%= a.id %>">Xem</a></td>
+            <td class="actions">
+              <a href="/<%= a.status === 'submitted' ? 'result' : 'attempt' %>/<%= a.id %>">Xem</a>
+              <% if (a.passed) { %><a href="/certificate/<%= a.id %>"><%- icon('award') %> Chứng nhận</a><% } %>
+            </td>
           </tr>
         <% }) %>
       </tbody>

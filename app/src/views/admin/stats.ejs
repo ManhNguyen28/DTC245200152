@@ -44,12 +44,13 @@
 <p class="muted">Câu có tỉ lệ đúng thấp có thể quá khó hoặc đáp án gây nhầm lẫn. Phương án in đậm là đáp án đúng.</p>
 <section class="card">
   <table>
-    <thead><tr><th>#</th><th>Câu hỏi</th><th>Tỉ lệ đúng</th><th>A</th><th>B</th><th>C</th><th>D</th><th>Bỏ trống</th></tr></thead>
+    <thead><tr><th>#</th><th>Câu hỏi</th><th>Độ khó</th><th>Tỉ lệ đúng</th><th>A</th><th>B</th><th>C</th><th>D</th><th>Bỏ trống</th></tr></thead>
     <tbody>
       <% questions.forEach((q, i) => { %>
         <tr>
           <td><%= i + 1 %></td>
           <td><%= q.content %></td>
+          <td><span class="pill diff-<%= q.difficulty %>"><%= DIFFICULTY[q.difficulty] %></span></td>
           <td class="rate">
             <% if (q.correctRate === null) { %>—<% } else { %>
               <div class="hbar"><div class="hbar-fill <%= q.correctRate < 50 ? 'low' : '' %>" data-w="<%= q.correctRate %>"></div></div>

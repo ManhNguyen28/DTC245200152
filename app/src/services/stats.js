@@ -59,7 +59,7 @@ async function getScoreDistribution(quizId) {
 // Thống kê từng câu: bao nhiêu người trả lời, tỉ lệ đúng, số người chọn mỗi phương án.
 async function getQuestionStats(quizId) {
   const [rows] = await pool.query(
-    `SELECT q.id, q.content, q.correct_option,
+    `SELECT q.id, q.content, q.correct_option, q.difficulty,
             COUNT(aa.id) AS answered,
             COALESCE(SUM(aa.is_correct), 0) AS correct,
             COALESCE(SUM(aa.selected_option = 'A'), 0) AS a,

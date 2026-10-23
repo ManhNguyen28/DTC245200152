@@ -1,0 +1,35 @@
+<%- include('partials/header') %>
+<div class="page-head">
+  <h1><%- icon('refresh') %> Ôn tập câu làm sai</h1>
+</div>
+<p class="muted">Danh sách các câu mà lần trả lời gần nhất của bạn là sai. Luyện tập lại bên dưới – kết quả luyện tập <strong>không</strong> tính vào điểm thi. Trả lời đúng ở lần thi sau, câu sẽ tự rời danh sách.</p>
+
+<% if (questions.length === 0) { %>
+  <section class="card center">
+    <h3><%- icon('award', 'lg') %></h3>
+    <p>Tuyệt vời! Bạn không còn câu nào làm sai.</p>
+    <a class="btn" href="/">Làm thêm đề mới</a>
+  </section>
+<% } else { %>
+  <form method="post" action="/me/practice">
+    <%- include('partials/csrf') %>
+    <% questions.forEach((q, i) => { %>
+      <fieldset class="card question">
+        <div class="q-head">
+          <div class="q-title"><span class="q-num">Câu <%= i + 1 %>.</span> <%= q.content %></div>
+          <span class="pill diff-<%= q.difficulty %>"><%= DIFFICULTY[q.difficulty] %></span>
+        </div>
+        <p class="muted small"><%- icon('book') %> <%= q.quiz_title %> · lần trước bạn chọn: <strong><%= q.selected_option || 'không trả lời' %></strong></p>
+        <% ['A', 'B', 'C', 'D'].forEach((opt) => { %>
+          <label class="option">
+            <input type="radio" name="q_<%= q.id %>" value="<%= opt %>">
+            <span class="opt-key"><%= opt %></span>
+            <span><%= q['option_' + opt.toLowerCase()] %></span>
+          </label>
+        <% }) %>
+      </fieldset>
+    <% }) %>
+    <button class="btn" type="submit"><%- icon('check') %> Kiểm tra đáp án</button>
+  </form>
+<% } %>
+<%- include('partials/footer') %>

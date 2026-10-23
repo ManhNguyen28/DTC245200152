@@ -1,0 +1,40 @@
+<%- include('partials/header') %>
+<h1><%- icon('user') %> Hồ sơ cá nhân</h1>
+<div class="two-col">
+  <form class="card form wide" method="post" action="/me/profile">
+    <h3>Thông tin</h3>
+    <%- include('partials/csrf') %>
+    <label>Tên đăng nhập
+      <input value="<%= profile.username %>" disabled>
+      <small>Không thể đổi tên đăng nhập.</small>
+    </label>
+    <label>Họ và tên *
+      <input name="full_name" value="<%= profile.full_name %>" required maxlength="100" autocomplete="name">
+    </label>
+    <label>Mã sinh viên
+      <input name="student_code" value="<%= profile.student_code || '' %>" maxlength="20">
+    </label>
+    <button class="btn" type="submit"><%- icon('check') %> Lưu thông tin</button>
+  </form>
+
+  <form class="card form wide" method="post" action="/me/password">
+    <h3><%- icon('key') %> Đổi mật khẩu</h3>
+    <%- include('partials/csrf') %>
+    <label>Mật khẩu hiện tại *
+      <input name="current_password" type="password" required maxlength="72" autocomplete="current-password">
+    </label>
+    <label>Mật khẩu mới *
+      <input name="new_password" type="password" required minlength="8" maxlength="72" autocomplete="new-password">
+      <small>Ít nhất 8 ký tự, gồm cả chữ và số.</small>
+    </label>
+    <label>Nhập lại mật khẩu mới *
+      <input name="confirm_password" type="password" required minlength="8" maxlength="72" autocomplete="new-password">
+    </label>
+    <button class="btn" type="submit"><%- icon('key') %> Đổi mật khẩu</button>
+  </form>
+</div>
+<section class="card">
+  <p class="muted small">Vai trò: <strong><%= profile.role === 'admin' ? 'Quản trị viên' : 'Học viên' %></strong>
+    · Tạo tài khoản: <%= formatDate(profile.created_at) %> · Đăng nhập gần nhất: <%= formatDate(profile.last_login_at) %></p>
+</section>
+<%- include('partials/footer') %>

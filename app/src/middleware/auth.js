@@ -8,14 +8,16 @@ async function loadUser(req, res, next) {
   res.locals.currentUser = null;
   if (req.session.userId) {
     const [[user]] = await pool.query(
-      'SELECT id, username, full_name, student_code, role FROM users WHERE id = ?',
+      'SELECT id, username, full_name, student_code, role, is_locked FROM users WHERE id = ?',
       [req.session.userId]
     );
-    if (user) {
+    if (user && !user.is_locked) {
       req.user = user;
       res.locals.currentUser = user;
     } else {
-      delete req.session.userId; // tài khoản đã bị xóa
+      // Tài khoản bị xóa hoặc bị quản trị viên khóa -> đăng xuất ngay ở request kế tiếp.
+      delete req.session.userId;
+      if (user) setFlash(req, 'error', 'Tài khoản của bạn đã bị khóa. Vui lòng liên hệ quản trị viên.');
     }
   }
   next();

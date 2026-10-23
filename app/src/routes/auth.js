@@ -6,6 +6,7 @@ const pool = require('../db');
 const logger = require('../logger');
 const loginLimiter = require('../middleware/loginLimiter');
 const metrics = require('../metrics');
+const { audit } = require('../services/audit');
 const { cleanText, safeNext, setFlash } = require('../utils');
 
 const router = express.Router();
@@ -33,7 +34,7 @@ router.post('/login', loginLimiter.check, async (req, res) => {
   const next = safeNext(req.body.next);
 
   const [[user]] = username
-    ? await pool.query('SELECT id, username, password_hash, role FROM users WHERE username = ?', [username])
+    ? await pool.query('SELECT id, username, password_hash, role, is_locked FROM users WHERE username = ?', [username])
     : [[]];
   const valid = await bcrypt.compare(password, user ? user.password_hash : DUMMY_HASH);
 
@@ -41,11 +42,24 @@ router.post('/login', loginLimiter.check, async (req, res) => {
     loginLimiter.fail(req);
     metrics.loginAttempts.inc({ result: 'failed' });
     logger.warn('login_failed', { username, ip: req.ip });
+    await audit(req, 'login_failed', `Đăng nhập sai với tên "${username}"`, null);
     return res.status(401).render('login', {
       title: 'Đăng nhập',
       next,
       username,
       error: 'Tên đăng nhập hoặc mật khẩu không đúng.',
+    });
+  }
+
+  // Mật khẩu đúng nhưng tài khoản đang bị khóa.
+  if (user.is_locked) {
+    logger.warn('login_locked_account', { username, ip: req.ip });
+    await audit(req, 'login_locked_account', 'Tài khoản bị khóa cố đăng nhập', user);
+    return res.status(403).render('login', {
+      title: 'Đăng nhập',
+      next,
+      username,
+      error: 'Tài khoản đã bị khóa. Vui lòng liên hệ quản trị viên.',
     });
   }
 
@@ -55,6 +69,7 @@ router.post('/login', loginLimiter.check, async (req, res) => {
   await pool.query('UPDATE users SET last_login_at = NOW() WHERE id = ?', [user.id]);
   metrics.loginAttempts.inc({ result: 'success' });
   logger.info('login_success', { username: user.username, role: user.role, ip: req.ip });
+  await audit(req, 'login_success', `Đăng nhập (${user.role})`, user);
   res.redirect(303, next || (user.role === 'admin' ? '/admin' : '/'));
 });
 
@@ -85,11 +100,12 @@ router.post('/register', async (req, res) => {
     try {
       const hash = await bcrypt.hash(password, 10);
       const [result] = await pool.query(
-        "INSERT INTO users (username, password_hash, full_name, student_code, role) VALUES (?, ?, ?, ?, 'student')",
+        "INSERT INTO users (username, password_hash, full_name, student_code, role, last_login_at) VALUES (?, ?, ?, ?, 'student', NOW())",
         [values.username, hash, values.full_name, values.student_code || null]
       );
       metrics.registrations.inc();
       logger.info('user_registered', { user_id: result.insertId, username: values.username, ip: req.ip });
+      await audit(req, 'user_registered', `Đăng ký tài khoản học viên`, { id: result.insertId, username: values.username });
 
       await regenerateSession(req);
       req.session.userId = result.insertId;

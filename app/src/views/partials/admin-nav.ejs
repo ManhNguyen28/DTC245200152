@@ -1,6 +1,7 @@
 <nav class="subnav">
-  <a href="/admin" class="<%= locals.active === 'dashboard' ? 'active' : '' %>">Tổng quan</a>
-  <a href="/admin/quizzes" class="<%= locals.active === 'quizzes' ? 'active' : '' %>">Đề thi</a>
-  <a href="/admin/categories" class="<%= locals.active === 'categories' ? 'active' : '' %>">Danh mục</a>
-  <a href="/admin/users" class="<%= locals.active === 'users' ? 'active' : '' %>">Người dùng</a>
+  <a href="/admin" class="<%= locals.active === 'dashboard' ? 'active' : '' %>"><%- icon('chart') %> Tổng quan</a>
+  <a href="/admin/quizzes" class="<%= locals.active === 'quizzes' ? 'active' : '' %>"><%- icon('layers') %> Đề thi</a>
+  <a href="/admin/categories" class="<%= locals.active === 'categories' ? 'active' : '' %>"><%- icon('book') %> Danh mục</a>
+  <a href="/admin/users" class="<%= locals.active === 'users' ? 'active' : '' %>"><%- icon('users') %> Người dùng</a>
+  <a href="/admin/audit" class="<%= locals.active === 'audit' ? 'active' : '' %>"><%- icon('shield') %> Nhật ký hoạt động</a>
 </nav>

@@ -7,10 +7,12 @@
 
 <section class="card">
   <h2>Định dạng file</h2>
-  <p>Mỗi dòng là một câu hỏi gồm <strong>6 cột</strong>: nội dung, phương án A, B, C, D, đáp án đúng (A/B/C/D).
-     Ô có dấu phẩy thì đặt trong ngoặc kép. Có thể soạn bằng Excel rồi <em>Save As → CSV UTF-8</em>.</p>
-  <pre class="code">content,option_a,option_b,option_c,option_d,correct_option
-"Mục đích chính của HTTPS là gì?","Tăng tốc độ","Mã hóa dữ liệu truyền đi","Nén ảnh","Cache",B</pre>
+  <p>Mỗi dòng là một câu hỏi gồm <strong>6 cột bắt buộc</strong>: nội dung, phương án A, B, C, D, đáp án đúng (A/B/C/D)
+     và <strong>2 cột tùy chọn</strong>: giải thích đáp án, độ khó (<code>easy</code> / <code>medium</code> / <code>hard</code>).
+     Ô có dấu phẩy thì đặt trong ngoặc kép. Có thể soạn bằng Excel rồi <em>Save As → CSV UTF-8</em>,
+     hoặc bấm <strong>Xuất CSV</strong> ở một đề có sẵn để lấy file mẫu.</p>
+  <pre class="code">content,option_a,option_b,option_c,option_d,correct_option,explanation,difficulty
+"Mục đích chính của HTTPS là gì?","Tăng tốc độ","Mã hóa dữ liệu truyền đi","Nén ảnh","Cache",B,"HTTPS = HTTP + TLS",easy</pre>
 </section>
 
 <% if (errors.length) { %>

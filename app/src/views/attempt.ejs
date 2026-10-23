@@ -1,30 +1,52 @@
 <%- include('partials/header') %>
-<form method="post" action="/attempt/<%= attempt.id %>/submit" id="quiz-form" data-remaining="<%= remaining %>">
+<form method="post" action="/attempt/<%= attempt.id %>/submit" id="quiz-form" data-remaining="<%= remaining %>" data-attempt="<%= attempt.id %>">
   <%- include('partials/csrf') %>
-  <section class="card sticky-head">
-    <div class="page-head">
-      <div>
-        <h1><%= attempt.quiz_title %></h1>
-        <p class="muted">Thí sinh: <strong><%= attempt.full_name %></strong>
-          <% if (attempt.student_code) { %>(<%= attempt.student_code %>)<% } %></p>
+  <div class="exam-bar">
+    <section class="card">
+      <div class="exam-top">
+        <div>
+          <h1 class="no-margin"><%= attempt.quiz_title %></h1>
+          <span class="muted small"><%- icon('user') %> <%= attempt.full_name %><% if (attempt.student_code) { %> · <%= attempt.student_code %><% } %>
+            · Đã trả lời <strong id="answered">0</strong>/<%= questions.length %> · Đánh dấu <strong id="flag-count">0</strong></span>
+        </div>
+        <span class="timer"><%- icon('clock') %> <strong id="timer"></strong></span>
       </div>
-      <div class="timer">Còn lại <strong id="timer"></strong></div>
-    </div>
-    <p class="muted small">Đã trả lời <strong id="answered">0</strong>/<%= questions.length %> câu</p>
-  </section>
+      <div class="progress"><div class="progress-fill" id="progress-fill"></div></div>
+    </section>
+  </div>
 
-  <% questions.forEach((q, i) => { %>
-    <fieldset class="card question">
-      <legend>Câu <%= i + 1 %>. <%= q.content %></legend>
-      <% ['A', 'B', 'C', 'D'].forEach((opt) => { %>
-        <label class="option">
-          <input type="radio" name="q_<%= q.id %>" value="<%= opt %>">
-          <strong><%= opt %>.</strong> <%= q['option_' + opt.toLowerCase()] %>
-        </label>
+  <div class="exam-layout">
+    <div>
+      <% questions.forEach((q, i) => { %>
+        <fieldset class="card question" id="q-<%= i + 1 %>" data-name="q_<%= q.id %>">
+          <div class="q-head">
+            <div class="q-title"><span class="q-num">Câu <%= i + 1 %>.</span> <%= q.content %></div>
+            <button type="button" class="flag-btn" title="Đánh dấu để xem lại trước khi nộp"><%- icon('flag') %> Đánh dấu</button>
+          </div>
+          <% ['A', 'B', 'C', 'D'].forEach((opt) => { %>
+            <label class="option">
+              <input type="radio" name="q_<%= q.id %>" value="<%= opt %>">
+              <span class="opt-key"><%= opt %></span>
+              <span><%= q['option_' + opt.toLowerCase()] %></span>
+            </label>
+          <% }) %>
+        </fieldset>
       <% }) %>
-    </fieldset>
-  <% }) %>
+    </div>
 
-  <button class="btn" type="submit" data-confirm-unanswered="1">Nộp bài</button>
+    <aside class="card navigator">
+      <h3><%- icon('list') %> Danh sách câu</h3>
+      <div class="nav-grid">
+        <% questions.forEach((q, i) => { %><a href="#q-<%= i + 1 %>" id="nav-<%= i + 1 %>"><%= i + 1 %></a><% }) %>
+      </div>
+      <div class="legend">
+        <span><i class="a"></i> Đã trả lời</span>
+        <span><i class="f"></i> Đánh dấu xem lại</span>
+        <span><i></i> Chưa trả lời</span>
+      </div>
+      <button class="btn block" type="submit"><%- icon('check') %> Nộp bài</button>
+      <p class="muted small">Đáp án được lưu tạm trên trình duyệt – lỡ tải lại trang vẫn giữ nguyên.</p>
+    </aside>
+  </div>
 </form>
 <%- include('partials/footer') %>

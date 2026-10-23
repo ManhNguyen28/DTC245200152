@@ -54,9 +54,41 @@ function score10(score, total) {
   return total > 0 ? ((score / total) * 10).toFixed(2) : '0.00';
 }
 
+const DIFFICULTY = { easy: 'Dễ', medium: 'Trung bình', hard: 'Khó' };
+
+// Ô nhập <input type="datetime-local"> trả về giờ Việt Nam dạng "YYYY-MM-DDTHH:mm" -> đổi sang Date (UTC).
+function vnInputToDate(value) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)) return null;
+  const date = new Date(`${value}:00+07:00`);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+// Ngược lại: Date (UTC) -> chuỗi giờ Việt Nam cho ô datetime-local.
+function dateToVnInput(date) {
+  if (!date) return '';
+  return new Date(date).toLocaleString('sv-SE', { timeZone: TIME_ZONE }).replace(' ', 'T').slice(0, 16);
+}
+
+// Trạng thái đề theo lịch mở/đóng: upcoming (sắp mở), closed (đã đóng), open (đang mở).
+function quizStatus(quiz, now = new Date()) {
+  if (quiz.opens_at && new Date(quiz.opens_at) > now) return 'upcoming';
+  if (quiz.closes_at && new Date(quiz.closes_at) < now) return 'closed';
+  return 'open';
+}
+
+// Bài làm đạt yêu cầu: nộp đúng hạn và điểm hệ 10 >= điểm đạt của đề.
+function isPassed(attempt, passScore) {
+  return !attempt.is_late && attempt.total > 0 && (attempt.score / attempt.total) * 10 >= Number(passScore);
+}
+
 module.exports = {
   OPTIONS,
   TIME_ZONE,
+  DIFFICULTY,
+  vnInputToDate,
+  dateToVnInput,
+  quizStatus,
+  isPassed,
   toId,
   cleanText,
   toIntInRange,

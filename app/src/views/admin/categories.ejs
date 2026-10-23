@@ -5,32 +5,39 @@
 <form class="card filter" method="post" action="/admin/categories">
   <%- include('../partials/csrf') %>
   <input name="name" placeholder="Tên danh mục mới" required maxlength="100">
+  <select name="icon" title="Biểu tượng">
+    <% icons.forEach((ic) => { %><option value="<%= ic %>"><%= ic %></option><% }) %>
+  </select>
   <button class="btn" type="submit">+ Thêm</button>
 </form>
 
-<section class="card">
+<section class="card table-wrap">
   <table>
-    <thead><tr><th>Tên danh mục</th><th>Số đề</th><th>Thao tác</th></tr></thead>
+    <thead><tr><th></th><th>Tên danh mục / biểu tượng</th><th>Số đề</th><th>Thao tác</th></tr></thead>
     <tbody>
       <% categories.forEach((c) => { %>
         <tr>
+          <td><div class="cat-icon <%= c.icon %>"><%- icon(c.icon) %></div></td>
           <td>
             <form method="post" action="/admin/categories/<%= c.id %>" class="inline-edit">
               <%- include('../partials/csrf') %>
               <input name="name" value="<%= c.name %>" required maxlength="100">
-              <button class="link" type="submit">Lưu tên</button>
+              <select name="icon">
+                <% icons.forEach((ic) => { %><option value="<%= ic %>" <%= ic === c.icon ? 'selected' : '' %>><%= ic %></option><% }) %>
+              </select>
+              <button class="link" type="submit">Lưu</button>
             </form>
           </td>
           <td><%= c.quiz_count %></td>
           <td>
             <form method="post" action="/admin/categories/<%= c.id %>/delete" data-confirm="Xóa danh mục này? Các đề thuộc danh mục sẽ chuyển thành 'Chưa phân loại'.">
               <%- include('../partials/csrf') %>
-              <button class="link danger" type="submit">Xóa</button>
+              <button class="link danger" type="submit"><%- icon('trash') %> Xóa</button>
             </form>
           </td>
         </tr>
       <% }) %>
-      <% if (categories.length === 0) { %><tr><td colspan="3" class="muted">Chưa có danh mục nào.</td></tr><% } %>
+      <% if (categories.length === 0) { %><tr><td colspan="4" class="muted">Chưa có danh mục nào.</td></tr><% } %>
     </tbody>
   </table>
 </section>

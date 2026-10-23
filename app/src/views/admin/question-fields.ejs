@@ -1,15 +1,29 @@
 <label>Nội dung câu hỏi *
   <textarea name="content" rows="2" required maxlength="1000"><%= question.content || '' %></textarea>
 </label>
-<% ['A', 'B', 'C', 'D'].forEach((opt) => { %>
-  <label>Phương án <%= opt %> *
-    <input name="option_<%= opt.toLowerCase() %>" value="<%= question['option_' + opt.toLowerCase()] || '' %>" required maxlength="255">
+<div class="row">
+  <% ['A', 'B', 'C', 'D'].forEach((opt) => { %>
+    <label>Phương án <%= opt %> *
+      <input name="option_<%= opt.toLowerCase() %>" value="<%= question['option_' + opt.toLowerCase()] || '' %>" required maxlength="255">
+    </label>
+  <% }) %>
+</div>
+<div class="row">
+  <label>Đáp án đúng *
+    <select name="correct_option" required>
+      <% ['A', 'B', 'C', 'D'].forEach((opt) => { %>
+        <option value="<%= opt %>" <%= question.correct_option === opt ? 'selected' : '' %>><%= opt %></option>
+      <% }) %>
+    </select>
   </label>
-<% }) %>
-<label>Đáp án đúng *
-  <select name="correct_option" required>
-    <% ['A', 'B', 'C', 'D'].forEach((opt) => { %>
-      <option value="<%= opt %>" <%= question.correct_option === opt ? 'selected' : '' %>><%= opt %></option>
-    <% }) %>
-  </select>
+  <label>Độ khó
+    <select name="difficulty">
+      <% Object.entries(DIFFICULTY).forEach(([key, label]) => { %>
+        <option value="<%= key %>" <%= (question.difficulty || 'medium') === key ? 'selected' : '' %>><%= label %></option>
+      <% }) %>
+    </select>
+  </label>
+</div>
+<label>Giải thích đáp án
+  <textarea name="explanation" rows="2" maxlength="1000" placeholder="Hiện cho học viên sau khi nộp bài"><%= question.explanation || '' %></textarea>
 </label>

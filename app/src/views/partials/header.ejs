@@ -4,30 +4,42 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title><%= title %> | Quiz Online</title>
+  <script src="/static/js/theme.js"></script>
   <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
   <header class="topbar">
     <div class="container topbar-inner">
-      <a class="brand" href="/">Quiz Online</a>
-      <nav>
-        <a href="/">Đề thi</a>
+      <a class="brand" href="/"><span class="brand-logo"><%- icon('layers') %></span> Quiz Online</a>
+      <nav class="nav" id="main-nav">
+        <a href="/"><%- icon('home') %> Đề thi</a>
         <% if (locals.currentUser) { %>
-          <a href="/me/history">Lịch sử</a>
-          <% if (currentUser.role === 'admin') { %><a href="/admin">Quản trị</a><% } %>
-          <span class="who"><%= currentUser.full_name %></span>
+          <a href="/me/history"><%- icon('activity') %> Tiến bộ</a>
+          <a href="/me/review"><%- icon('refresh') %> Ôn tập</a>
+          <% if (currentUser.role === 'admin') { %><a href="/admin"><%- icon('chart') %> Quản trị</a><% } %>
+          <a href="/me/profile" class="who" title="Hồ sơ cá nhân"><%- icon('user') %> <%= currentUser.full_name %></a>
           <form method="post" action="/logout" class="inline">
             <input type="hidden" name="_csrf" value="<%= locals.csrfToken %>">
-            <button class="link light" type="submit">Đăng xuất</button>
+            <button class="link" type="submit" title="Đăng xuất"><%- icon('logout') %> Đăng xuất</button>
           </form>
         <% } else { %>
+          <a href="/verify"><%- icon('award') %> Xác thực chứng nhận</a>
           <a href="/login">Đăng nhập</a>
-          <a href="/register" class="nav-btn">Đăng ký</a>
+          <a href="/register" class="btn sm">Đăng ký</a>
         <% } %>
       </nav>
+      <div class="actions">
+        <button class="icon-btn" id="theme-toggle" type="button" title="Đổi giao diện sáng / tối">
+          <span class="theme-light-only"><%- icon('moon') %></span><span class="theme-dark-only"><%- icon('sun') %></span>
+        </button>
+        <button class="icon-btn" id="nav-toggle" type="button" title="Menu"><%- icon('menu') %></button>
+      </div>
     </div>
   </header>
   <main class="container">
     <% if (locals.flash) { %>
-      <div class="flash flash-<%= flash.type %>"><%= flash.message %></div>
+      <div class="flash flash-<%= flash.type %>">
+        <%- icon(flash.type === 'success' ? 'check' : (flash.type === 'error' ? 'x' : 'info')) %>
+        <span><%= flash.message %></span>
+      </div>
     <% } %>

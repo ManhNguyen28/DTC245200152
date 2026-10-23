@@ -2,46 +2,54 @@
 <%- include('../partials/admin-nav', { active: 'quizzes' }) %>
 <div class="page-head">
   <div>
+    <div class="category"><%= quiz.category_name || 'Chưa phân loại' %></div>
     <h1><%= quiz.title %></h1>
-    <p class="muted">
-      <%= quiz.category_name || 'Chưa phân loại' %> · <%= quiz.time_limit %> phút · <%= questions.length %> câu hỏi ·
-      <span class="pill <%= quiz.is_published ? 'pill-ok' : 'pill-warn' %>"><%= quiz.is_published ? 'Công khai' : 'Đang ẩn' %></span>
-    </p>
   </div>
   <div class="actions">
-    <a class="btn btn-ghost" href="/admin/quizzes/<%= quiz.id %>/edit">Sửa đề</a>
-    <a class="btn btn-ghost" href="/admin/quizzes/<%= quiz.id %>/import">Nhập từ CSV</a>
-    <a class="btn btn-ghost" href="/admin/quizzes/<%= quiz.id %>/stats">Thống kê</a>
-    <a class="btn btn-ghost" href="/quiz/<%= quiz.id %>">Xem như học viên</a>
+    <a class="btn btn-ghost sm" href="/admin/quizzes/<%= quiz.id %>/edit"><%- icon('edit') %> Sửa đề</a>
+    <a class="btn btn-ghost sm" href="/admin/quizzes/<%= quiz.id %>/import"><%- icon('upload') %> Nhập CSV</a>
+    <a class="btn btn-ghost sm" href="/admin/quizzes/<%= quiz.id %>/questions.csv"><%- icon('download') %> Xuất CSV</a>
+    <a class="btn btn-ghost sm" href="/admin/quizzes/<%= quiz.id %>/stats"><%- icon('chart') %> Thống kê</a>
+    <a class="btn btn-ghost sm" href="/quiz/<%= quiz.id %>"><%- icon('eye') %> Xem như học viên</a>
   </div>
 </div>
+<p>
+  <span class="pill <%= quiz.is_published ? 'pill-ok' : 'pill-warn' %>"><%= quiz.is_published ? 'Công khai' : 'Đang ẩn' %></span>
+  <% if (quiz.access_code_hash) { %><span class="pill pill-warn"><%- icon('lock') %> Có mã phòng thi</span><% } %>
+  <span class="badge"><%- icon('clock') %> <%= quiz.time_limit %> phút</span>
+  <span class="badge"><%- icon('list') %> <%= questions.length %> câu<%= quiz.questions_per_attempt > 0 ? ` · rút ${quiz.questions_per_attempt} mỗi lượt` : '' %></span>
+  <span class="badge"><%- icon('target') %> Đạt ≥ <%= Number(quiz.pass_score) %></span>
+  <% if (quiz.opens_at || quiz.closes_at) { %><span class="badge"><%- icon('calendar') %> <%= quiz.opens_at ? formatDate(quiz.opens_at) : '…' %> → <%= quiz.closes_at ? formatDate(quiz.closes_at) : '…' %></span><% } %>
+</p>
 
 <% questions.forEach((q, i) => { %>
   <section class="card question">
-    <div class="page-head">
-      <h3>Câu <%= i + 1 %>. <%= q.content %></h3>
+    <div class="q-head">
+      <div class="q-title"><span class="q-num">Câu <%= i + 1 %>.</span> <%= q.content %></div>
       <div class="actions">
-        <a href="/admin/questions/<%= q.id %>/edit">Sửa</a>
+        <span class="pill diff-<%= q.difficulty %>"><%= DIFFICULTY[q.difficulty] %></span>
+        <a href="/admin/questions/<%= q.id %>/edit" title="Sửa"><%- icon('edit') %></a>
         <form method="post" action="/admin/questions/<%= q.id %>/delete" data-confirm="Xóa câu hỏi này?">
           <%- include('../partials/csrf') %>
-          <button class="link danger" type="submit">Xóa</button>
+          <button class="link danger" type="submit" title="Xóa"><%- icon('trash') %></button>
         </form>
       </div>
     </div>
     <% ['A', 'B', 'C', 'D'].forEach((opt) => { %>
-      <p class="answer <%= opt === q.correct_option ? 'is-correct' : '' %>">
-        <strong><%= opt %>.</strong> <%= q['option_' + opt.toLowerCase()] %>
+      <div class="answer <%= opt === q.correct_option ? 'is-correct' : '' %>">
+        <span class="opt-key"><%= opt %></span> <%= q['option_' + opt.toLowerCase()] %>
         <% if (opt === q.correct_option) { %><span class="tag ok">Đáp án đúng</span><% } %>
-      </p>
+      </div>
     <% }) %>
+    <% if (q.explanation) { %><div class="explain"><strong>Giải thích:</strong> <%= q.explanation %></div><% } %>
   </section>
 <% }) %>
 <% if (questions.length === 0) { %><p class="muted">Đề chưa có câu hỏi. Thêm thủ công bên dưới hoặc nhập từ file CSV.</p><% } %>
 
 <h2>Thêm câu hỏi</h2>
-<form class="card form" method="post" action="/admin/quizzes/<%= quiz.id %>/questions">
+<form class="card form wide" method="post" action="/admin/quizzes/<%= quiz.id %>/questions">
   <%- include('../partials/csrf') %>
   <%- include('question-fields', { question: {} }) %>
-  <div><button class="btn" type="submit">Thêm câu hỏi</button></div>
+  <button class="btn" type="submit">+ Thêm câu hỏi</button>
 </form>
 <%- include('../partials/footer') %>

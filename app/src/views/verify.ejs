@@ -1,0 +1,26 @@
+<%- include('partials/header') %>
+<form class="card form narrow" method="get" action="/verify">
+  <h1><%- icon('award') %> Xác thực giấy chứng nhận</h1>
+  <p class="muted">Nhập mã in trên giấy chứng nhận (dạng <code>Q35-000123-ABCDEF123456</code>) để kiểm tra tính hợp lệ.</p>
+  <label>Mã xác thực
+    <input name="code" value="<%= result ? result.code : '' %>" required maxlength="40" autocomplete="off">
+  </label>
+  <button class="btn block" type="submit"><%- icon('search') %> Kiểm tra</button>
+</form>
+
+<% if (result) { %>
+  <% if (result.valid) { %>
+    <section class="card form narrow">
+      <p><span class="pill pill-ok"><%- icon('check') %> HỢP LỆ</span></p>
+      <p>Giấy chứng nhận cấp cho <strong><%= result.attempt.full_name %></strong><% if (result.attempt.student_code) { %> (<%= result.attempt.student_code %>)<% } %>,
+        hoàn thành <strong><%= result.attempt.quiz_title %></strong> với điểm
+        <strong><%= score10(result.attempt.score, result.attempt.total) %>/10</strong> ngày <%= formatDate(result.attempt.submitted_at) %>.</p>
+    </section>
+  <% } else { %>
+    <section class="card form narrow">
+      <p><span class="pill pill-bad"><%- icon('x') %> KHÔNG HỢP LỆ</span></p>
+      <p>Mã không tồn tại hoặc đã bị chỉnh sửa. Giấy chứng nhận này không do hệ thống cấp.</p>
+    </section>
+  <% } %>
+<% } %>
+<%- include('partials/footer') %>

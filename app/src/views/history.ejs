@@ -1,13 +1,37 @@
 <%- include('partials/header') %>
-<h1>Lịch sử làm bài</h1>
-<div class="grid stats">
-  <div class="card center"><p class="muted">Số bài đã nộp</p><p class="score"><%= doneCount %></p></div>
-  <div class="card center"><p class="muted">Điểm trung bình</p><p class="score"><%= avg === null ? '—' : avg.toFixed(2) %></p></div>
+<div class="page-head">
+  <h1>Lịch sử & tiến bộ</h1>
+  <a class="btn btn-ghost" href="/me/review"><%- icon('refresh') %> Ôn tập câu làm sai</a>
+</div>
+<div class="grid kpis">
+  <div class="stat"><div class="stat-icon"><%- icon('check', 'lg') %></div><div><div class="stat-value"><%= doneCount %></div><div class="stat-label">Bài đã nộp</div></div></div>
+  <div class="stat"><div class="stat-icon"><%- icon('activity', 'lg') %></div><div><div class="stat-value"><%= avg === null ? '—' : avg.toFixed(2) %></div><div class="stat-label">Điểm trung bình</div></div></div>
+  <div class="stat"><div class="stat-icon"><%- icon('target', 'lg') %></div><div><div class="stat-value"><%= best === null ? '—' : best.toFixed(2) %></div><div class="stat-label">Điểm cao nhất</div></div></div>
+  <div class="stat"><div class="stat-icon"><%- icon('award', 'lg') %></div><div><div class="stat-value"><%= passedCount %></div><div class="stat-label">Bài đạt (có chứng nhận)</div></div></div>
 </div>
 
-<section class="card">
+<% if (chart) { %>
+  <section class="card">
+    <h3><%- icon('activity') %> Biểu đồ điểm (tối đa 20 bài gần nhất)</h3>
+    <svg class="chart-svg" viewBox="0 0 <%= chart.W %> <%= chart.H %>" role="img" aria-label="Biểu đồ điểm theo thời gian">
+      <% chart.grid.forEach((g) => { %>
+        <line class="grid-line" x1="<%= chart.pad.left %>" y1="<%= g.y %>" x2="<%= chart.W - chart.pad.right %>" y2="<%= g.y %>"/>
+        <text class="axis-label" x="<%= chart.pad.left - 8 %>" y="<%= g.y + 4 %>" text-anchor="end"><%= g.v %></text>
+      <% }) %>
+      <line class="pass-line" x1="<%= chart.pad.left %>" y1="<%= chart.passY %>" x2="<%= chart.W - chart.pad.right %>" y2="<%= chart.passY %>"/>
+      <% if (chart.points.length > 1) { %><polyline class="line" points="<%= chart.line %>"/><% } %>
+      <% chart.points.forEach((p) => { %>
+        <circle class="dot" cx="<%= p.x %>" cy="<%= p.y %>" r="5"><title><%= p.title %>: <%= p.label %></title></circle>
+        <text class="dot-label" x="<%= p.x %>" y="<%= p.y - 10 %>"><%= p.label %></text>
+      <% }) %>
+    </svg>
+    <p class="muted small">Đường nét đứt màu cam: mốc 5 điểm.</p>
+  </section>
+<% } %>
+
+<section class="card table-wrap">
   <table>
-    <thead><tr><th>Đề thi</th><th>Trạng thái</th><th>Điểm</th><th>Thời gian làm</th><th>Bắt đầu</th><th></th></tr></thead>
+    <thead><tr><th>Đề thi</th><th>Kết quả</th><th>Điểm</th><th>Thời gian làm</th><th>Bắt đầu</th><th></th></tr></thead>
     <tbody>
       <% attempts.forEach((a) => { %>
         <tr>
@@ -15,12 +39,16 @@
           <td>
             <% if (a.status === 'in_progress') { %><span class="pill pill-info">Đang làm</span>
             <% } else if (a.is_late) { %><span class="pill pill-bad">Quá giờ</span>
-            <% } else { %><span class="pill pill-ok">Đã nộp</span><% } %>
+            <% } else if (a.passed) { %><span class="pill pill-ok">Đạt</span>
+            <% } else { %><span class="pill pill-warn">Chưa đạt</span><% } %>
           </td>
           <td><%= a.status === 'submitted' ? `${a.score}/${a.total} (${score10(a.score, a.total)})` : '—' %></td>
           <td><%= formatDuration(a.duration) %></td>
           <td><%= formatDate(a.started_at) %></td>
-          <td><a href="/<%= a.status === 'submitted' ? 'result' : 'attempt' %>/<%= a.id %>"><%= a.status === 'submitted' ? 'Xem kết quả' : 'Làm tiếp' %></a></td>
+          <td class="actions">
+            <a href="/<%= a.status === 'submitted' ? 'result' : 'attempt' %>/<%= a.id %>"><%= a.status === 'submitted' ? 'Xem kết quả' : 'Làm tiếp' %></a>
+            <% if (a.passed) { %><a href="/certificate/<%= a.id %>"><%- icon('award') %></a><% } %>
+          </td>
         </tr>
       <% }) %>
       <% if (attempts.length === 0) { %>

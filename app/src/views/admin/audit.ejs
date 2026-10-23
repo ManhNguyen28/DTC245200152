@@ -1,0 +1,37 @@
+<%- include('../partials/header') %>
+<%- include('../partials/admin-nav', { active: 'audit' }) %>
+<div class="page-head">
+  <h1><%- icon('shield') %> Nhật ký hoạt động</h1>
+</div>
+<p class="muted">Ghi lại các thao tác quan trọng: đăng nhập (thành công / thất bại), đăng ký, đổi mật khẩu, thay đổi đề thi và câu hỏi, quản lý người dùng, xuất dữ liệu. Hiển thị 200 bản ghi mới nhất.</p>
+
+<form class="card filter" method="get" action="/admin/audit">
+  <select name="action">
+    <option value="">Tất cả hành động</option>
+    <% actions.forEach((a) => { %>
+      <option value="<%= a.action %>" <%= a.action === action ? 'selected' : '' %>><%= a.action %> (<%= a.n %>)</option>
+    <% }) %>
+  </select>
+  <input name="user" value="<%= username %>" placeholder="Tên đăng nhập" maxlength="30">
+  <button class="btn" type="submit"><%- icon('search') %> Lọc</button>
+  <% if (action || username) { %><a href="/admin/audit">Xóa lọc</a><% } %>
+</form>
+
+<section class="card table-wrap">
+  <table>
+    <thead><tr><th>Thời gian</th><th>Người thực hiện</th><th>Hành động</th><th>Chi tiết</th><th>IP</th></tr></thead>
+    <tbody>
+      <% logs.forEach((l) => { const bad = /failed|locked|deleted|reset/.test(l.action); %>
+        <tr>
+          <td class="small"><%= formatDate(l.created_at) %></td>
+          <td><%= l.username ? '@' + l.username : '—' %></td>
+          <td><span class="pill <%= bad ? 'pill-warn' : 'pill-muted' %>"><%= l.action %></span></td>
+          <td><%= l.detail %></td>
+          <td class="small"><code><%= l.ip %></code></td>
+        </tr>
+      <% }) %>
+      <% if (logs.length === 0) { %><tr><td colspan="5" class="muted">Không có bản ghi.</td></tr><% } %>
+    </tbody>
+  </table>
+</section>
+<%- include('../partials/footer') %>

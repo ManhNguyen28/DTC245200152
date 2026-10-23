@@ -120,7 +120,13 @@ async function startAttempt(user, quiz) {
   if (!questions.length) return { error: 'Đề thi này chưa có câu hỏi nào.' };
 
   const ids = questions.map((q) => q.id);
-  const order = quiz.shuffle_questions ? shuffle(ids) : ids;
+  let order = quiz.shuffle_questions ? shuffle(ids) : ids;
+  // Ngân hàng câu hỏi: mỗi lượt rút ngẫu nhiên N câu (luôn chọn ngẫu nhiên, sau đó giữ/xáo thứ tự theo cấu hình).
+  const n = quiz.questions_per_attempt;
+  if (n > 0 && n < ids.length) {
+    order = shuffle(ids).slice(0, n);
+    if (!quiz.shuffle_questions) order.sort((a, b) => a - b);
+  }
 
   // Hạn nộp do máy chủ tính (NOW() của MySQL) -> sửa đồng hồ máy tính không có tác dụng.
   const [result] = await pool.query(

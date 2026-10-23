@@ -1,11 +1,12 @@
 <%- include('../partials/header') %>
 <%- include('../partials/admin-nav', { active: 'quizzes' }) %>
+<% const STATUS = { open: ['pill-ok', 'Đang mở'], upcoming: ['pill-info', 'Sắp mở'], closed: ['pill-muted', 'Đã đóng'] }; %>
 <div class="page-head">
   <h1>Quản lý đề thi</h1>
   <a class="btn" href="/admin/quizzes/new">+ Tạo đề mới</a>
 </div>
 
-<section class="card">
+<section class="card table-wrap">
   <table>
     <thead>
       <tr><th>Đề thi</th><th>Danh mục</th><th>Trạng thái</th><th>Câu</th><th>Thời gian</th><th>Lượt làm</th><th>Thao tác</th></tr>
@@ -13,20 +14,28 @@
     <tbody>
       <% quizzes.forEach((q) => { %>
         <tr>
-          <td><a href="/admin/quizzes/<%= q.id %>"><%= q.title %></a></td>
+          <td><a href="/admin/quizzes/<%= q.id %>"><strong><%= q.title %></strong></a>
+            <% if (q.has_code) { %><span class="pill pill-warn" title="Cần mã vào phòng thi"><%- icon('lock') %></span><% } %></td>
           <td><%= q.category_name || 'Chưa phân loại' %></td>
-          <td><span class="pill <%= q.is_published ? 'pill-ok' : 'pill-warn' %>"><%= q.is_published ? 'Công khai' : 'Đang ẩn' %></span></td>
-          <td><%= q.question_count %></td>
+          <td>
+            <span class="pill <%= q.is_published ? 'pill-ok' : 'pill-warn' %>"><%= q.is_published ? 'Công khai' : 'Đang ẩn' %></span>
+            <% if (q.is_published && q.status !== 'open') { %><span class="pill <%= STATUS[q.status][0] %>"><%= STATUS[q.status][1] %></span><% } %>
+          </td>
+          <td><%= q.question_count %><%= q.questions_per_attempt > 0 ? ` (rút ${q.questions_per_attempt})` : '' %></td>
           <td><%= q.time_limit %> phút</td>
-          <td><%= q.attempt_count %><%= q.max_attempts > 0 ? ` (tối đa ${q.max_attempts}/người)` : '' %></td>
+          <td><%= q.attempt_count %><%= q.max_attempts > 0 ? ` (≤${q.max_attempts}/người)` : '' %></td>
           <td class="actions">
             <a href="/admin/quizzes/<%= q.id %>">Câu hỏi</a>
             <a href="/admin/quizzes/<%= q.id %>/edit">Sửa</a>
             <a href="/admin/quizzes/<%= q.id %>/results">Kết quả</a>
             <a href="/admin/quizzes/<%= q.id %>/stats">Thống kê</a>
+            <form method="post" action="/admin/quizzes/<%= q.id %>/duplicate">
+              <%- include('../partials/csrf') %>
+              <button class="link" type="submit" title="Nhân bản đề"><%- icon('copy') %></button>
+            </form>
             <form method="post" action="/admin/quizzes/<%= q.id %>/delete" data-confirm="Xóa đề thi này cùng toàn bộ câu hỏi và kết quả?">
               <%- include('../partials/csrf') %>
-              <button class="link danger" type="submit">Xóa</button>
+              <button class="link danger" type="submit" title="Xóa đề"><%- icon('trash') %></button>
             </form>
           </td>
         </tr>

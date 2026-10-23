@@ -1,6 +1,6 @@
-content,option_a,option_b,option_c,option_d,correct_option
-"Mục đích chính của HTTPS là gì?","Tăng tốc độ tải trang","Mã hóa dữ liệu truyền giữa trình duyệt và máy chủ","Nén hình ảnh","Lưu cache trên máy chủ",B
-"Header X-Frame-Options dùng để chống loại tấn công nào?","SQL Injection","Clickjacking","DDoS","Brute force",B
-"Vì sao nên băm mật khẩu bằng bcrypt thay vì lưu trực tiếp?","Để mật khẩu ngắn hơn","Để đăng nhập nhanh hơn","Nếu lộ CSDL kẻ tấn công cũng không biết mật khẩu gốc","Để dễ khôi phục mật khẩu",C
-"Nguyên tắc 'least privilege' (quyền tối thiểu) nghĩa là gì?","Cấp mọi quyền cho quản trị viên","Chỉ cấp đúng quyền cần thiết để thực hiện công việc","Không cấp quyền cho ai","Cấp quyền theo thâm niên",B
-"Chạy container bằng user không phải root giúp gì?","Container chạy nhanh hơn","Giảm thiệt hại nếu ứng dụng bị chiếm quyền","Tiết kiệm RAM","Không cần mật khẩu",B
+content,option_a,option_b,option_c,option_d,correct_option,explanation,difficulty
+"Mục đích chính của HTTPS là gì?","Tăng tốc độ tải trang","Mã hóa dữ liệu truyền giữa trình duyệt và máy chủ","Nén hình ảnh","Lưu cache trên máy chủ",B,"HTTPS = HTTP + TLS: mã hóa và xác thực máy chủ, chống nghe lén trên đường truyền.",easy
+"Header X-Frame-Options dùng để chống loại tấn công nào?","SQL Injection","Clickjacking","DDoS","Brute force",B,"Ngăn trang web khác nhúng trang của ta vào iframe để lừa người dùng bấm.",medium
+"Vì sao nên băm mật khẩu bằng bcrypt thay vì lưu trực tiếp?","Để mật khẩu ngắn hơn","Để đăng nhập nhanh hơn","Nếu lộ CSDL kẻ tấn công cũng không biết mật khẩu gốc","Để dễ khôi phục mật khẩu",C,"bcrypt là hàm băm một chiều, chậm có chủ đích nên rất khó dò ngược mật khẩu.",medium
+"Nguyên tắc 'least privilege' (quyền tối thiểu) nghĩa là gì?","Cấp mọi quyền cho quản trị viên","Chỉ cấp đúng quyền cần thiết để thực hiện công việc","Không cấp quyền cho ai","Cấp quyền theo thâm niên",B,"Mỗi thành phần chỉ có đúng quyền cần dùng; bị chiếm quyền thì thiệt hại cũng bị giới hạn.",easy
+"Chạy container bằng user không phải root giúp gì?","Container chạy nhanh hơn","Giảm thiệt hại nếu ứng dụng bị chiếm quyền","Tiết kiệm RAM","Không cần mật khẩu",B,"Kẻ chiếm được tiến trình không có quyền root, khó leo thang đặc quyền ra máy chủ.",hard

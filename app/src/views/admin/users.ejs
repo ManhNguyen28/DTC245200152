@@ -1,20 +1,37 @@
 <%- include('../partials/header') %>
 <%- include('../partials/admin-nav', { active: 'users' }) %>
 <h1>Người dùng</h1>
-<section class="card">
+<section class="card table-wrap">
   <table>
-    <thead><tr><th>Họ và tên</th><th>Tên đăng nhập</th><th>Mã SV</th><th>Vai trò</th><th>Bài đã nộp</th><th>Điểm TB</th><th>Đăng ký</th><th>Đăng nhập gần nhất</th></tr></thead>
+    <thead><tr><th>Người dùng</th><th>Vai trò</th><th>Trạng thái</th><th>Bài nộp</th><th>Điểm TB</th><th>Đăng nhập gần nhất</th><th>Thao tác</th></tr></thead>
     <tbody>
-      <% users.forEach((u) => { %>
+      <% users.forEach((u) => { const self = locals.currentUser && u.id === currentUser.id; %>
         <tr>
-          <td><%= u.full_name %></td>
-          <td>@<%= u.username %></td>
-          <td><%= u.student_code || '—' %></td>
-          <td><span class="pill <%= u.role === 'admin' ? 'pill-info' : 'pill-ok' %>"><%= u.role === 'admin' ? 'Quản trị' : 'Học viên' %></span></td>
+          <td><strong><%= u.full_name %></strong><br><span class="muted small">@<%= u.username %><%= u.student_code ? ' · ' + u.student_code : '' %></span></td>
+          <td><span class="pill <%= u.role === 'admin' ? 'pill-info' : 'pill-muted' %>"><%= u.role === 'admin' ? 'Quản trị' : 'Học viên' %></span></td>
+          <td><% if (u.is_locked) { %><span class="pill pill-bad"><%- icon('lock') %> Bị khóa</span><% } else { %><span class="pill pill-ok">Hoạt động</span><% } %></td>
           <td><%= u.attempts %></td>
           <td><%= u.avg_score ?? '—' %></td>
-          <td><%= formatDate(u.created_at) %></td>
-          <td><%= formatDate(u.last_login_at) %></td>
+          <td class="small"><%= formatDate(u.last_login_at) %></td>
+          <td class="actions">
+            <% if (self) { %>
+              <span class="muted small">(bạn)</span>
+            <% } else { %>
+              <form method="post" action="/admin/users/<%= u.id %>/lock" data-confirm="<%= u.is_locked ? 'Mở khóa' : 'Khóa' %> tài khoản @<%= u.username %>?">
+                <%- include('../partials/csrf') %>
+                <button class="link <%= u.is_locked ? '' : 'danger' %>" type="submit"><%- icon(u.is_locked ? 'unlock' : 'lock') %> <%= u.is_locked ? 'Mở khóa' : 'Khóa' %></button>
+              </form>
+              <form method="post" action="/admin/users/<%= u.id %>/role" data-confirm="Đổi vai trò của @<%= u.username %>?">
+                <%- include('../partials/csrf') %>
+                <input type="hidden" name="role" value="<%= u.role === 'admin' ? 'student' : 'admin' %>">
+                <button class="link" type="submit"><%- icon('user') %> <%= u.role === 'admin' ? 'Thành học viên' : 'Thành quản trị' %></button>
+              </form>
+              <form method="post" action="/admin/users/<%= u.id %>/reset-password" data-confirm="Đặt lại mật khẩu cho @<%= u.username %>? Mật khẩu cũ sẽ không dùng được nữa.">
+                <%- include('../partials/csrf') %>
+                <button class="link" type="submit"><%- icon('key') %> Đặt lại mật khẩu</button>
+              </form>
+            <% } %>
+          </td>
         </tr>
       <% }) %>
     </tbody>

@@ -110,7 +110,55 @@ echo "  ℹ️  Dòng đầu file CSV: $(head -2 $T/kq.csv | tail -1 | cut -c1-9
 check "Đề ẩn: khách không thấy" "$(sql "UPDATE quizzes SET is_published=0 WHERE id=$QID"; code $B/quiz/$QID)" 404
 check "Đề ẩn: admin vẫn xem được" "$(code -b $T/admin $B/quiz/$QID)" 200
 
-echo "== 8. Múi giờ =="
+echo "== 8. Chức năng nâng cao =="
+# Giấy chứng nhận + mã xác thực (sv_an đạt 5/5 ở bài $AID)
+CERT=$(curl -s -b $T/sv_an $B/certificate/$AID | grep -o 'Q35-[0-9]\{6\}-[0-9A-F]\{12\}' | head -1)
+[ -n "$CERT" ] && ok "Giấy chứng nhận có mã xác thực $CERT" || bad "Giấy chứng nhận"
+check "Xác thực mã thật -> HỢP LỆ" "$(curl -s "$B/verify?code=$CERT" | grep -c 'HỢP LỆ</span>' )" 1
+FAKE="${CERT%?}$( [ "${CERT: -1}" = "A" ] && echo B || echo A )"
+check "Xác thực mã bị sửa -> KHÔNG HỢP LỆ" "$(curl -s "$B/verify?code=$FAKE" | grep -c 'KHÔNG HỢP LỆ')" 1
+check "sv_binh xem giấy chứng nhận của sv_an bị chặn" "$(code -b $T/sv_binh $B/certificate/$AID)" 404
+# Ôn tập câu sai (sv_binh làm sai 2 câu ở đề 2)
+check "Ôn tập: số câu sai của sv_binh" "$(curl -s -b $T/sv_binh $B/me/review | grep -c 'fieldset class="card question"')" 2
+check "Luyện tập lại (không lưu điểm)" "$(code -b $T/sv_binh -d "_csrf=$(csrf sv_binh /me/review)" $B/me/practice)" 200
+check "Trang tiến bộ có biểu đồ" "$(curl -s -b $T/sv_an $B/me/history | grep -c 'class="chart-svg"')" 1
+# Hồ sơ + đổi mật khẩu
+code -b $T/sv_an -d "_csrf=$(csrf sv_an /me/profile)" --data-urlencode "full_name=Nguyễn Văn An (sửa)" -d "student_code=DTC999" $B/me/profile >/dev/null
+check "Cập nhật hồ sơ" "$(sql "SELECT student_code FROM users WHERE username='sv_an'")" DTC999
+code -b $T/sv_an -d "_csrf=$(csrf sv_an /me/profile)&current_password=SaiRoi123&new_password=MoiMoi123&confirm_password=MoiMoi123" $B/me/password >/dev/null
+check "Đổi mật khẩu với mật khẩu cũ sai bị từ chối" "$(sql "SELECT COUNT(*) FROM audit_logs WHERE action='password_changed'")" 0
+code -b $T/sv_an -d "_csrf=$(csrf sv_an /me/profile)&current_password=MatKhau123&new_password=MoiMoi123&confirm_password=MoiMoi123" $B/me/password >/dev/null
+sleep 3; check "Đăng nhập bằng mật khẩu mới" "$(rm -f $T/an2; login an2 sv_an MoiMoi123)" 303
+# Lịch thi: đề 3 chưa đến giờ mở -> không bắt đầu được
+sql "UPDATE quizzes SET opens_at = NOW() + INTERVAL 1 DAY WHERE id=3"
+check "Đề chưa đến giờ mở: không bắt đầu được" "$(start sv_binh 3)" "$B/quiz/3"
+sql "UPDATE quizzes SET opens_at = NULL WHERE id=3"
+# Mã vào phòng thi (admin đặt mã cho đề 2 qua form sửa đề)
+TOK=$(csrf admin /admin/quizzes/2/edit)
+code -b $T/admin -d "_csrf=$TOK&title=Mang+may+tinh+can+ban&category_id=2&time_limit=10&max_attempts=0&questions_per_attempt=0&pass_score=5&shuffle_questions=1&is_published=1&access_code=Phong123" $B/admin/quizzes/2 >/dev/null
+check "Mã phòng thi được lưu dạng băm bcrypt" "$(sql "SELECT LEFT(access_code_hash,2) FROM quizzes WHERE id=2")" '$2'
+check "Sai mã phòng thi -> không vào được" "$(curl -s -o /dev/null -w '%{redirect_url}' -b $T/sv_binh -d "_csrf=$(csrf sv_binh /quiz/2)&access_code=sai" $B/quiz/2/start)" "$B/quiz/2"
+U=$(curl -s -o /dev/null -w '%{redirect_url}' -b $T/sv_binh -d "_csrf=$(csrf sv_binh /quiz/2)&access_code=Phong123" $B/quiz/2/start)
+[[ "$U" == *"/attempt/"* ]] && ok "Đúng mã phòng thi -> vào làm bài" || bad "Đúng mã phòng thi ($U)"
+# Ngân hàng câu hỏi: đề 1 có 10 câu, mỗi lượt rút 5
+check "Ngân hàng câu hỏi: lượt làm đề 1 có 5 câu" "$(sql "SELECT JSON_LENGTH(question_order) FROM attempts WHERE id=$AID")" 5
+# Quản trị: nhân bản đề, xuất câu hỏi, khóa / mở khóa, đặt lại mật khẩu, nhật ký
+U=$(curl -s -o /dev/null -w '%{redirect_url}' -b $T/admin -d "_csrf=$(csrf admin /admin/quizzes)" $B/admin/quizzes/1/duplicate); NID=${U##*/}
+check "Nhân bản đề: bản sao có đủ 10 câu" "$(sql "SELECT COUNT(*) FROM questions WHERE quiz_id=${NID:-0}")" 10
+check "Xuất câu hỏi CSV (tiêu đề + 10 câu)" "$(curl -s -b $T/admin $B/admin/quizzes/1/questions.csv | wc -l)" 11
+BID_USER=$(sql "SELECT id FROM users WHERE username='sv_binh'")
+code -b $T/admin -d "_csrf=$(csrf admin /admin/users)" $B/admin/users/$BID_USER/lock >/dev/null
+check "Khóa tài khoản: sv_binh bị đăng xuất ngay" "$(code -b $T/sv_binh $B/me/history)" 303
+sleep 3; check "Khóa tài khoản: sv_binh không đăng nhập được" "$(rm -f $T/b2; login b2 sv_binh MatKhau456)" 403
+code -b $T/admin -d "_csrf=$(csrf admin /admin/users)" $B/admin/users/$BID_USER/lock >/dev/null
+TMP=$(curl -s -L -b $T/admin -c $T/admin -d "_csrf=$(csrf admin /admin/users)" $B/admin/users/$BID_USER/reset-password | grep -o 'Mật khẩu tạm của @sv_binh: [^ ]*' | awk '{print $NF}')
+sleep 3; check "Đặt lại mật khẩu: đăng nhập bằng mật khẩu tạm" "$(rm -f $T/b3; login b3 sv_binh "$TMP")" 303
+check "Admin không tự khóa được chính mình" "$(code -b $T/admin -d "_csrf=$(csrf admin /admin/users)" $B/admin/users/$(sql "SELECT id FROM users WHERE username='$ADMIN_USER'")/lock; sql "SELECT is_locked FROM users WHERE username='$ADMIN_USER'")" "3030"
+check "Nhật ký ghi nhận khóa/đặt lại mật khẩu" "$(sql "SELECT COUNT(*) FROM audit_logs WHERE action IN ('user_locked','user_unlocked','user_password_reset')")" 3
+check "Trang nhật ký hoạt động" "$(code -b $T/admin $B/admin/audit)" 200
+check "Học viên vào trang nhật ký bị cấm" "$(code -b $T/b3 $B/admin/audit)" 403
+
+echo "== 9. Múi giờ =="
 echo "  ℹ️  MySQL (UTC):  $(sql "SELECT started_at FROM attempts WHERE id=$AID")"
 echo "  ℹ️  Web hiển thị: $(curl -s -b $T/admin $B/admin/quizzes/1/results | grep -o '[0-9]*:[0-9]*:[0-9]* [0-9]*/[0-9]*/[0-9]*' | tail -1)  (giờ Việt Nam = UTC+7)"
 

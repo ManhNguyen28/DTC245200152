@@ -12,8 +12,10 @@ const { loadUser, requireAdmin } = require('./middleware/auth');
 const authRoutes = require('./routes/auth');
 const publicRoutes = require('./routes/public');
 const adminRoutes = require('./routes/admin');
+const meRoutes = require('./routes/me');
 const metrics = require('./metrics');
-const { formatDate, formatDuration, score10 } = require('./utils');
+const { icon } = require('./icons');
+const { formatDate, formatDuration, score10, DIFFICULTY, dateToVnInput } = require('./utils');
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
@@ -33,6 +35,9 @@ app.locals.hostname = os.hostname();
 app.locals.formatDate = formatDate;
 app.locals.formatDuration = formatDuration;
 app.locals.score10 = score10;
+app.locals.icon = icon;
+app.locals.DIFFICULTY = DIFFICULTY;
+app.locals.dateToVnInput = dateToVnInput;
 
 // 1. File tĩnh (CSS, JS): trả về ngay, không cần session hay đăng nhập.
 app.use('/static', express.static(path.join(__dirname, '..', 'public'), { maxAge: '1h' }));
@@ -88,6 +93,7 @@ app.use(loadUser);
 // 5. Các trang của ứng dụng. Khu vực /admin chỉ dành cho quản trị viên.
 app.use('/', authRoutes);
 app.use('/', publicRoutes);
+app.use('/me', meRoutes);
 app.use('/admin', requireAdmin, adminRoutes);
 
 // 6. Không khớp route nào -> 404; lỗi không lường trước -> 500 (ghi log chi tiết, không lộ cho người dùng).
