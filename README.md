@@ -190,7 +190,7 @@ Yêu cầu: Docker Engine + Compose plugin (Linux) hoặc Docker Desktop, Git.
 
 ```bash
 # 1. Lấy mã nguồn
-git clone https://github.com/DTC245200152/DTC245200152.git
+git clone https://github.com/ManhNguyen28/DTC245200152.git
 cd DTC245200152
 
 # 2. Tạo file biến môi trường rồi đặt mật khẩu mạnh và PUBLIC_HOST (IP máy chủ) trong .env
